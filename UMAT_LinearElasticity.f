@@ -53,7 +53,7 @@
         ! stress state parameters update
         do i = 1, NTENS
           STRESS(i) = Sig(i)
-      end do
+        end do
         
         DDSDDE = 0.0
         DDSDDE(1:3,1:3) = D2
