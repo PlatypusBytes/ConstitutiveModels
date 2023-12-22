@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.34330.188
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{6989167D-11E4-40FE-8C1A-2192A86A7E90}") = "umat", "umat\umat.vfproj", "{8158484E-6BB0-4822-9062-1772294BBB1B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8158484E-6BB0-4822-9062-1772294BBB1B}.Debug|x64.ActiveCfg = Debug|x64
+		{8158484E-6BB0-4822-9062-1772294BBB1B}.Debug|x64.Build.0 = Debug|x64
+		{8158484E-6BB0-4822-9062-1772294BBB1B}.Debug|x86.ActiveCfg = Debug|Win32
+		{8158484E-6BB0-4822-9062-1772294BBB1B}.Debug|x86.Build.0 = Debug|Win32
+		{8158484E-6BB0-4822-9062-1772294BBB1B}.Release|x64.ActiveCfg = Release|x64
+		{8158484E-6BB0-4822-9062-1772294BBB1B}.Release|x64.Build.0 = Release|x64
+		{8158484E-6BB0-4822-9062-1772294BBB1B}.Release|x86.ActiveCfg = Release|Win32
+		{8158484E-6BB0-4822-9062-1772294BBB1B}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {3E6CAF4A-76B7-4070-9811-A40F6DB09BBC}
+	EndGlobalSection
+EndGlobal
