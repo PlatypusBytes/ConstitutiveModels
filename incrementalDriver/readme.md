@@ -27,6 +27,12 @@ To link the material model and the incremental driver, you need to run the follo
 gfortran elastic.o incrementalDriver.o -o incrementalDriver
 ```
 
+Before run you need to change the incrementalDriver permissions
+
+```bash
+chmod +x incrementalDriver
+```
+
 ## Run the incremental driver with elastic umat
 To run the incremental driver with the elastic material model, you need to run the following command:
 
