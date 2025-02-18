@@ -19,7 +19,7 @@ def principal_stresses(stress_tensor):
     return principal_stresses
 
 
-def read_file(file_name, cohesion=0, friction_angle=30, psi=0):
+def read_file(file_name, cohesion, friction_angle, psi):
     """
     Reads the output file and computes the principal stresses, q, p' and the Mohr-Coulomb yield criterion.
 
