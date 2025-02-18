@@ -7,10 +7,10 @@ as an object file. Then you need to link both object files to create the executa
 
 
 ### Compile the material model
-To compile the material model, e.g. the Linear Elastic material model you need to run the following command:
+To compile the material model, e.g. Mohr-Coulomb material model you need to run the following command:
 
 ```bash
-gfortran -c elastic.f -o elastic.o
+gfortran -c UMAT_MohrCoulomb.f -o UMAT_MohrCoulomb.o
 ```
 
 ### Compile the incremental driver
@@ -24,7 +24,7 @@ gfortran -c incrementalDriver.f -o incrementalDriver.o
 To link the material model and the incremental driver, you need to run the following command:
 
 ```bash
-gfortran elastic.o incrementalDriver.o -o incrementalDriver
+gfortran UMAT_MohrCoulomb.o incrementalDriver.o -o incrementalDriver
 ```
 
 Before run you need to change the incrementalDriver permissions
@@ -33,13 +33,15 @@ Before run you need to change the incrementalDriver permissions
 chmod +x incrementalDriver
 ```
 
-## Run the incremental driver with elastic umat
-To run the incremental driver with the elastic material model, you need to run the following command:
+## Run the incremental driver
+To run the incremental driver with the compiled material model (in this example the Mohr-Coulomb material model),
+ you need to run the following command:
 
 ```bash
-./incrementalDriver test=./example/test.inp param=./example/parameters.inp ini=./example/initialconditions.inp
+./incrementalDriver test=test.inp param=parameters.inp ini=initialconditions.inp
 ```
 
-The output of the program will be stored in the file `Txt_UnComAni.out`.
-In the folder [example](./example) you can find the input files for the test, the parameters and the initial conditions.
+The output of the program will be stored in the file specified in the first line of `test.inp` file.
+In the folder [example_MorhCoulomb](./example_MorhCoulomb) you can find the input files for the `test.inp`,
+the `parameters.inp` and the `initialconditions.inp`.
 

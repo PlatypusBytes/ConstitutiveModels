@@ -91,7 +91,12 @@ def read_file(file_name, cohesion, friction_angle, psi):
 
     return results
 
-def make_plots(data):
+def make_plots_MC(data):
+    """
+    Makes plot for MC material model
+
+    :param data: Dictionary containing the computed values.	
+    """
 
     fig, ax = plt.subplots(3, 1, figsize=(8, 10))
 
@@ -125,4 +130,4 @@ def make_plots(data):
 
 if __name__ == "__main__":
     results = read_file("Txt_UnComAni.out", 0, 30, 0)
-    make_plots(results)
+    make_plots_MC(results)
