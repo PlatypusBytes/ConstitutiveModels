@@ -3,8 +3,8 @@ from abc import abstractmethod
 
 import numpy as np
 
-from models.utils import StressUtils
-from models.incr_driver import IncrDriver
+from python_models.utils import StressUtils
+from python_models.incr_driver import IncrDriver
 
 class GeneralYieldFunction():
     def __init__(self):

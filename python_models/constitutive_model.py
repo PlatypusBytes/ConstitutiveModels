@@ -1,16 +1,16 @@
 
-from models.solving_algorithms.brute_force import BruteForceAlgorithm
-from models.utils import StressUtils
+from python_models.solving_algorithms.brute_force import BruteForceAlgorithm
+from python_models.utils import StressUtils
 
 import numpy as np
 
 class BaseConstitutiveModel:
 
-    def __init__(self, yield_function, flow_rule, elasticity_equation, solving_algorithm=BruteForceAlgorithm(), hardening_rule= None, plastic_multiplier_rule= None):
+    def __init__(self, yield_function, flow_rule, elasticity_model, solving_algorithm=BruteForceAlgorithm(), hardening_rule= None, plastic_multiplier_rule= None):
 
         self.yield_function = yield_function
         self.flow_rule = flow_rule
-        self.elasticity_equation = elasticity_equation
+        self.elasticity_model = elasticity_model
         self.solving_algorithm = solving_algorithm
 
         self.stress_utils = StressUtils()
@@ -23,7 +23,7 @@ class BaseConstitutiveModel:
         self.D_tot = None
 
 
-    def calculate_plastic_potential_multiplier(self):
+    def calculate_plastic_potential_multiplier(self, strain_vector):
         """
         Calculate the increment of the plastic multiplier
 
@@ -38,10 +38,9 @@ class BaseConstitutiveModel:
         self.flow_rule.calculate_derivative()
         derivative_flow_rule = self.flow_rule.derivative
 
-
         # standard approach
-        # delta_lambda1 = np.inner(np.inner(derivative_yield_function,D),self.strain_vector) / (
-        #     np.inner(np.inner(derivative_yield_function,D),derivative_dilatancy_function) )
+        # delta_lambda = np.inner(np.inner(derivative_yield_function,self.D_el),strain_vector) / (
+        #     np.inner(np.inner(derivative_yield_function,self.D_el),derivative_flow_rule) )
 
         # euler backward approach
         delta_lambda = self.yield_function.yield_residual / np.inner(np.inner(derivative_yield_function,self.D_el),derivative_flow_rule)
@@ -53,15 +52,74 @@ class BaseConstitutiveModel:
 
 
 
-    def update_stress(self):
+    def update_stress(self,strain_vector):
 
-        delta_lambda = self.calculate_plastic_potential_multiplier()
+        delta_lambda = self.calculate_plastic_potential_multiplier(strain_vector)
 
         # standard approach, trial stress - delta_lambda * D_el.dot(flow_rule.derivative)
         stress = self.stress_utils.stress_vector - delta_lambda *self.D_el.dot(self.flow_rule.derivative)
 
-
         return stress
+
+    def consistency_condition(self, stress):
+
+        # stress = self.stress_utils.stress_vector - factor * self.D_el.dot(self.flow_rule.derivative)
+        self.stress_utils.update_stress(stress)
+        self.stress_utils.update_invariants()
+
+        self.yield_function.calculate_yield_function()
+
+        return self.yield_function.yield_residual
+
+    def solve_1(self, strain_vector):
+
+        convergence_tol = 1e-6
+        max_internal_iteration = 100
+        i = 0
+        y0 = self.yield_function.yield_residual
+        # if the yield function is greater than zero, then plasticity is activated
+        while y0 > convergence_tol and i < max_internal_iteration:
+            delta_lambda = self.calculate_plastic_potential_multiplier(strain_vector)
+            stress = self.stress_utils.stress_vector - delta_lambda * self.D_el.dot(self.flow_rule.derivative)
+
+            y0 = self.consistency_condition(stress)
+
+            i += 1
+
+        if i == max_internal_iteration:
+            raise ValueError('No convergence max internal iteration reached')
+
+    def solve_pegasus(self, strain_vector):
+        convergence_tol = 1e-6
+        max_internal_iteration = 100
+        i = 0
+        F_new = self.yield_function.yield_residual
+        alpha_0 = 0
+        alpha_1 = 1
+
+        delta_sig_trial = self.D_el.dot(strain_vector)
+        F0 = self.consistency_condition(self.original_stress + alpha_0 * delta_sig_trial)
+        F1 = self.consistency_condition(self.original_stress + alpha_1 * delta_sig_trial)
+        alpha_new =1
+        # if the yield function is greater than zero, then plasticity is activated
+        while F_new > convergence_tol and i < max_internal_iteration:
+            alpha_new = alpha_1 - F1 * (alpha_1 - alpha_0) / (F1 - F0)
+            delta_sig_trial = self.D_el.dot(strain_vector)
+            F_new = self.consistency_condition(self.original_stress + alpha_new * delta_sig_trial)
+            # if F_new is opposite sign to F0
+            if F_new * F0 < 0:
+                alpha_1 = alpha_new
+                F1 = F_new
+            else:
+                F1 = F1*F0/(F0*F_new)
+                alpha_0 = alpha_new
+                F0 = F_new
+
+            i+=1
+
+        a=1+1
+        # self.consistency_condition(self.original_stress + alpha_new * delta_sig_trial)
+
 
 
     def main(self, stress_vector, strain_vector):
@@ -73,9 +131,11 @@ class BaseConstitutiveModel:
         :return:
         """
 
+        self.original_stress = np.copy(stress_vector)
+
         self.stress_utils.update_stress(stress_vector)
 
-        self.D_el = self.elasticity_equation.calculate_elastic_matrix()
+        self.D_el = self.elasticity_model.calculate_elastic_matrix()
 
         trial_delta_stress = self.D_el.dot(strain_vector)
         trial_stress = self.stress_utils.stress_vector + trial_delta_stress
@@ -95,87 +155,25 @@ class BaseConstitutiveModel:
             self.flow_rule.stress_utils = self.stress_utils
             self.flow_rule.initialize()
 
+        # self.solve_1(strain_vector)
+        self.solve_pegasus(strain_vector)
 
-        # if the yield function is greater than zero, then plasticity is activated
-        while self.yield_function.yield_residual > convergence_tol and i < max_internal_iteration:
-
-            # elastoplastic stress update
-            stress = self.update_stress()
-            self.stress_utils.update_stress(stress)
-            self.stress_utils.update_invariants()
-
-            self.yield_function.calculate_yield_function()
-            i += 1
+        # y0= self.yield_function.yield_residual
+        # # if the yield function is greater than zero, then plasticity is activated
+        # while y0 > convergence_tol and i < max_internal_iteration:
+        #
+        #     delta_lambda = self.calculate_plastic_potential_multiplier(strain_vector)
+        #     stress = self.stress_utils.stress_vector - delta_lambda * self.D_el.dot(self.flow_rule.derivative)
+        #     y0 = self.consistency_condition(stress)
+        #
+        #     # # elastoplastic stress update
+        #     # stress = self.update_stress(strain_vector)
+        #     # self.stress_utils.update_stress(stress)
+        #     # self.stress_utils.update_invariants()
+        #     #
+        #     # self.yield_function.calculate_yield_function()
+        #     i += 1
 
         if i == max_internal_iteration:
             raise ValueError('No convergence max internal iteration reached')
 
-
-
-if __name__ == '__main__':
-
-    from models.incr_driver import IncrDriver
-    from models.yield_surfaces.matsuoka_nakai import MatsuokaNakai
-    from models.elasticity_models.hookes_law import HooksLaw
-
-    yield_function = MatsuokaNakai({'angle': 30, 'cohesion': 0.00})
-    flow_rule = MatsuokaNakai({'angle': 0, 'cohesion': 0.00})
-
-    G = 2000
-    nu = 0.33
-    E = 2 * G * (1 + nu)
-    elasticity_model = HooksLaw({'young_modulus': E, 'poison_ratio': nu})
-    elasticity_model.calculate_elastic_matrix()
-    #
-    # params = {'young_modulus': E, 'poison_ratio': nu, 'phi': 30, 'psi': 1e-5, 'c': 0.00, 'tensile_cutoff': 10000}
-    #
-    stress_vector = np.array([-1, -1, -1, 0, 0, 0])
-    strain_increment = -0.0001
-    # d_stran = -0.0001
-
-    strain = np.zeros(6)
-    d_strain = np.zeros(6)
-    #
-    # delta_strain = np.array([0,0,-0.0001,0,0,0])
-    incr_stress_input = np.array([0, 0, 0, 0, 0, 0])
-    control_type = [1, 1, 0, 1, 1, 1]
-
-    orig_stress_vector = np.copy(stress_vector)
-    all_stress_vectors = [stress_vector]
-    all_strain_vectors = [np.zeros(6)]
-
-    delta_stress = np.zeros(6)
-    strain_vector = np.zeros(6)
-
-
-    const_model = BaseConstitutiveModel(yield_function, flow_rule, elasticity_model)
-    incr_driver = IncrDriver()
-
-    for t in range(10):
-
-        delta_strain = np.array([0, 0, strain_increment, 0, 0, 0])
-        correction_delta_strain = np.zeros(6)
-
-        approx_delta_stress = np.zeros(6)
-        old_d_stress_vector = np.copy(stress_vector)
-
-        max_iter = 100
-        for i in range(max_iter + 1):
-
-            u_d_stress = np.zeros(6) - approx_delta_stress
-            incr_driver.calculate_time_step(correction_delta_strain, u_d_stress, control_type, elasticity_model.elastic_matrix)
-            delta_strain = delta_strain + correction_delta_strain
-
-            const_model.main(stress_vector, delta_strain)
-
-            if i < max_iter:
-                approx_delta_stress = const_model.stress_utils.stress_vector - old_d_stress_vector
-                stress_vector = np.copy(old_d_stress_vector)
-            else:
-                strain_vector = strain_vector + delta_strain
-                stress_vector = const_model.stress_utils.stress_vector
-
-        all_stress_vectors.append(stress_vector)
-        all_strain_vectors.append(strain_vector)
-
-    a = 1 + 1

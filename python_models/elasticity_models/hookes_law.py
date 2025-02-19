@@ -1,4 +1,4 @@
-from models.elasticity_models.base_law import BaseLaw
+from python_models.elasticity_models.base_law import BaseLaw
 
 import numpy as np
 

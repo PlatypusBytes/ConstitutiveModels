@@ -1,4 +1,4 @@
-from models.yield_surfaces.general_yield_surface import GeneralYieldSurface
+from python_models.yield_surfaces.general_yield_surface import GeneralYieldSurface
 
 import numpy as np
 
@@ -15,7 +15,6 @@ class MatsuokaNakai(GeneralYieldSurface):
 
     def initialize(self):
         self.calculate_constants()
-
 
     def calculate_constants(self):
         # if angle is zero, return tresca constants
@@ -39,4 +38,8 @@ class MatsuokaNakai(GeneralYieldSurface):
             self.beta = A2 / (A1 ** (3 / 2))
             self.gamma = 0
 
+    def calculate_yield_function(self):
+        super().calculate_yield_function()
 
+    def calculate_derivative(self):
+        super().calculate_derivative()
