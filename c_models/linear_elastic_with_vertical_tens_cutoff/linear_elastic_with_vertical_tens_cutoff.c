@@ -103,47 +103,54 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     // C12 = C13 = C23 = lambda
     // C44 = C55 = C66 = G
 
-    double DDSDDE_elastic[36]; // NTENS * NTENS = 6 * 6 = 36
-    for (int i = 0; i < 36; ++i) DDSDDE_elastic[i] = 0.0; // Initialize
+    // define compilation time constants
+    #define n_tens 6
+    #define total_size 36 // Total size of the stiffness matrix, 6 * 6 = 36
+
+    double DDSDDE_elastic[total_size]; // NTENS * NTENS = 6 * 6 = 36
+    for (int i = 0; i < total_size; ++i) DDSDDE_elastic[i] = 0.0; // Initialize
 
     double C11 = lambda + 2.0 * G;
     double C12 = lambda;
     double C44 = G;
 
     // Diagonal terms
-    DDSDDE_elastic[0] = C11; // C(1,1) index 0
-    DDSDDE_elastic[7] = C11; // C(2,2) index 7 = 1*6 + 1
-    DDSDDE_elastic[14] = C11; // C(3,3) index 14 = 2*6 + 2
-    DDSDDE_elastic[21] = C44; // C(4,4) index 21 = 3*6 + 3
-    DDSDDE_elastic[28] = C44; // C(5,5) index 28 = 4*6 + 4
-    DDSDDE_elastic[35] = C44; // C(6,6) index 35 = 5*6 + 5
+    DDSDDE_elastic[0] = C11; // C(0,0) index 0
+    DDSDDE_elastic[7] = C11; // C(1,1) index 7 = 1*6 + 1
+    DDSDDE_elastic[14] = C11; // C(2,2) index 14 = 2*6 + 2
+    DDSDDE_elastic[21] = C44; // C(3,3) index 21 = 3*6 + 3
+    DDSDDE_elastic[28] = C44; // C(4,4) index 28 = 4*6 + 4
+    DDSDDE_elastic[35] = C44; // C(5,5) index 35 = 5*6 + 5
 
     // Off-diagonal terms (symmetric)
-    DDSDDE_elastic[1] = C12; // C(1,2) index 1 = 0*6 + 1
-    DDSDDE_elastic[6] = C12; // C(2,1) index 6 = 1*6 + 0
+    DDSDDE_elastic[1] = C12; // C(0,1) index 1 = 0*6 + 1
+    DDSDDE_elastic[6] = C12; // C(1,0) index 6 = 1*6 + 0
 
-    DDSDDE_elastic[2] = C12; // C(1,3) index 2 = 0*6 + 2
-    DDSDDE_elastic[12] = C12; // C(3,1) index 12 = 2*6 + 0
+    DDSDDE_elastic[2] = C12; // C(0,2) index 2 = 0*6 + 2
+    DDSDDE_elastic[12] = C12; // C(2,0) index 12 = 2*6 + 0
 
-    DDSDDE_elastic[8] = C12; // C(2,3) index 8 = 1*6 + 2
-    DDSDDE_elastic[13] = C12; // C(3,2) index 13 = 2*6 + 1
+    DDSDDE_elastic[8] = C12; // C(1,2) index 8 = 1*6 + 2
+    DDSDDE_elastic[13] = C12; // C(2,1) index 13 = 2*6 + 1
 
 
     // --- 4. Calculate Strain at End of Increment ---
-    double strain_end[6];
-    for (int i = 0; i < 6; ++i) {
+    double strain_end[n_tens];
+    for (int i = 0; i < n_tens; ++i) {
         strain_end[i] = STRAN[i] + DSTRAN[i];
     }
 
     // --- 5. Calculate Elastic Trial Stress ---
     // stress_trial = DDSDDE_elastic * strain_end
-    // Matrix-vector multiplication (remembering column-major storage for DDSDDE)
-    double stress_trial[6];
-    for (int i = 0; i < 6; ++i) {
+
+    double stress_trial[n_tens];
+    for (int i = 0; i <n_tens; ++i) {
         stress_trial[i] = 0.0;
-        for (int j = 0; j < 6; ++j) {
+        double *row_ptr = &DDSDDE_elastic[i * n_tens]; // Pointer to the start of the row
+        for (int j = 0; j < n_tens; ++j) {
             // DDSDDE_elastic[row + col*NROWS] = DDSDDE_elastic[i + j*6]
-            stress_trial[i] += DDSDDE_elastic[i + j * 6] * strain_end[j];
+            stress_trial[i] += row_ptr[j] * strain_end[j];  // Row-major access (better for C)
+
+            //stress_trial[i] += DDSDDE_elastic[i + j * n_tens] * strain_end[j]; this is column based
         }
     }
 
@@ -159,10 +166,10 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     // --- 7. Update Stress, Jacobian, and State Variables ---
     if (tension_cutoff_active) {
         // Tension cutoff is active: Zero out all stresses and the Jacobian
-        for (int i = 0; i < 6; ++i) {
+        for (int i = 0; i < n_tens; ++i) {
             STRESS[i] = 0.0;
         }
-        for (int i = 0; i < 36; ++i) {
+        for (int i = 0; i < total_size; ++i) {
             // Set Jacobian to zero (or a very small number for numerical stability if needed)
             DDSDDE[i] = 0.0; // Or maybe 1.0e-12 * DDSDDE_elastic[i] ? Test this.
         }
@@ -170,28 +177,14 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     }
     else {
         // Elastic behavior: Use the trial stress and elastic Jacobian
-        for (int i = 0; i < 6; ++i) {
+        for (int i = 0; i < n_tens; ++i) {
             STRESS[i] = stress_trial[i];
         }
-        for (int i = 0; i < 36; ++i) {
+        for (int i = 0; i < total_size; ++i) {
             DDSDDE[i] = DDSDDE_elastic[i];
         }
         STATEV[0] = 0.0; // Indicate elastic state
     }
 
-    //// --- 8. Update Optional Outputs (Set to Zero for Simplicity) ---
-    //*SSE = 0.0; // Could calculate 0.5 * stress * elastic_strain if needed
-    //*SPD = 0.0;
-    //*SCD = 0.0;
-    //*RPL = 0.0;
-    //// DDSDDT, DRPLDE, DRPLDT are often zero unless thermal coupling is active
-    //for (int i = 0; i < *NTENS; ++i) DDSDDT[i] = 0.0;
-    //for (int i = 0; i < *NTENS; ++i) DRPLDE[i] = 0.0;
-    //*DRPLDT = 0.0;
-
-    // PNEWDT can be reduced if convergence is difficult, e.g., *PNEWDT = 0.5 * (*PNEWDT);
-    // No change here means *PNEWDT remains as suggested by Abaqus.
-
-    // --- 9. Return ---
     return;
 }

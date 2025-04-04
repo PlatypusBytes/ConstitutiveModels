@@ -22,7 +22,7 @@ def test_pressure():
                         "file_name": f"{project_dir}\c_models\linear_elastic_with_vertical_tens_cutoff\linear_elastic_with_vertical_tens_cutoff.dll",
                         "properties": list(params.values()),}
 
-    delta_strain = np.array([0, 0.0001, 0, 0, 0, 0])
+    delta_strain = np.array([0, -0.0001, 0, 0, 0, 0])
     incr_driver = IncrDriver(orig_stress_vector,delta_strain,control_type,const_model_info,10,100 )
     incr_driver.solve()
 
