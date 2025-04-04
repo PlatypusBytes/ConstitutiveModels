@@ -4,7 +4,13 @@ from python_models.utils import StressUtils
 
 import numpy as np
 
-class BaseConstitutiveModel:
+
+class YieldSurfaceCorrectionConstitutiveModel:
+    """
+    For general elastoplastic models
+
+    sloan et al 2001 page 135
+    """
 
     def __init__(self, yield_function, flow_rule, elasticity_model, solving_algorithm=BruteForceAlgorithm(), hardening_rule= None, plastic_multiplier_rule= None):
 

@@ -48,6 +48,7 @@ class IncrDriver():
                 else:
                     strain_vector = strain_vector + delta_strain
                     stress_vector = self.constitutive_model.stress_utils.stress_vector
+
             self.stresses.append(stress_vector)
             self.strains.append(strain_vector)
 
@@ -74,10 +75,3 @@ class IncrDriver():
         for i in range(len(control_type)):
             if control_type[i] ==1:
                 stresses[i] = D[i,:].dot(strains)
-
-
-
-
-
-
-
