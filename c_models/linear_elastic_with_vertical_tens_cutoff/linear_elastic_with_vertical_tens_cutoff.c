@@ -65,7 +65,6 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     // --- 0. Check Inputs ---
     if (*NTENS != 6 || *NDI != 3 || *NSHR != 3) {
         // Handle error - This UMAT is specifically for 3D
-        // In Abaqus, you might write to MSG file or call utility routines.
         // For simplicity, we'll print an error and potentially stop (though stopping is usually bad)
         fprintf(stderr, "UMAT Error: NTENS != 6. This UMAT requires 3D elements.\n");
         // exit(1); // Avoid exiting in production code if possible
@@ -148,7 +147,8 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         double *row_ptr = &DDSDDE_elastic[i * n_tens]; // Pointer to the start of the row
         for (int j = 0; j < n_tens; ++j) {
             // DDSDDE_elastic[row + col*NROWS] = DDSDDE_elastic[i + j*6]
-            stress_trial[i] += row_ptr[j] * strain_end[j];  // Row-major access (better for C)
+            stress_trial[i] += row_ptr[j] * strain_end[j];  // Row-major access (better for C), equivalent to:
+            // stress_trial[i] += DDSDDE_elastic[i* ntens + j] * strain_end[j];
 
             //stress_trial[i] += DDSDDE_elastic[i + j * n_tens] * strain_end[j]; this is column based
         }
