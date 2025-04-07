@@ -4,27 +4,26 @@ import cffi
 class Utils:
 
     @staticmethod
-    def run_c_umat(umat_file_name, stress, state_vars, strain, dstrain, props, ndi=3, nshr=3, nstatv=1):
+    def run_c_umat(umat_file_name, stress, state_vars, strain, dstrain, props, ndi=3, nshr=3):
         """
         Call the UMAT function from Python using CFFI.
 
         Temperature and predefined field variables are not used in this function.
 
-        Parameters:
-        - umat_file_name: Path to the compiled UMAT shared library (DLL)
-        - stress: Initial stress vector [σ11, σ22, σ33, σ12, σ13, σ23]
-        - state_vars: State variables array
-        - strain: Total strain vector
-        - dstrain: Increment in strain vector
-        - props: Material properties array
-        - ndi: Number of direct stress components
-        - nshr: Number of shear stress components
-        - nstatv: Number of state variables
+        Args:
+            umat_file_name (str): Path to the compiled UMAT shared library (DLL)
+            stress (Sequence[float]): Initial stress vector [σ11, σ22, σ33, σ12, σ13, σ23]
+            state_vars (Sequence[float]): State variables array
+            strain (Sequence[float]): Total strain vector
+            dstrain (Sequence[float]): Increment in strain vector
+            props (Sequence[float]): Material properties array
+            ndi (int): Number of direct stress components (default is 3 for 3D)
+            nshr (int): Number of shear stress components (default is 3 for 3D)
 
         Returns:
-        - stress: Updated stress vector
-        - ddsdde: Updated Jacobian matrix
-        - state_vars: Updated state variables
+            stress (np.ndarray): Updated stress vector
+            ddsdde (np.ndarray): Updated Jacobian matrix
+            state_vars (np.ndarray): Updated state variables
         """
 
         # Convert inputs to lists if they are not already
@@ -33,6 +32,8 @@ class Utils:
         strain = list(strain)
         dstrain = list(dstrain)
         props = list(props)
+
+        nstatv = len(state_vars)
 
         # Initialize CFFI
         ffi = cffi.FFI()
@@ -85,8 +86,8 @@ class Utils:
         c_props = ffi.new("double[]", props)
         c_nprops = ffi.new("int*", len(props))
 
-        # Rotation matrix (identity)
-        c_drot = ffi.new("double[]", [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0])
+        # # Rotation matrix (identity)
+        # c_drot = ffi.new("double[]", [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0])
 
         # Element info
         c_noel = ffi.new("int*", 1)
@@ -106,7 +107,7 @@ class Utils:
             c_cmname, c_ndi, c_nshr, c_ntens, c_nstatv,
             c_props, c_nprops,
             ffi.NULL,  # COORDS (null)
-            c_drot,
+            ffi.NULL, # DROT (null)
             ffi.NULL, ffi.NULL, ffi.NULL, ffi.NULL,  # PNEWDT, CELENT, DFGRD0, DFGRD1 (null)
             c_noel, c_npt, c_layer, c_kspt, c_kstep, c_kinc
         )
@@ -120,29 +121,3 @@ class Utils:
                                    for i in range(ntens)])
 
         return stress_updated, ddsdde_updated, statev_updated
-
-# Example usage
-if __name__ == "__main__":
-    # Example material parameters
-    E = 200000.0  # Young's modulus
-    nu = 0.3  # Poisson's ratio
-    props = [E, nu, 0.0]
-
-    # Initial conditions
-    stress = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Initial stress
-    state_vars = [0.0]  # Initial state variable(s)
-
-    # Apply strain increment
-    strain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Initial strain
-    dstrain = [-0.001, 0.0, 0.0, 0.0, 0.0, 0.0]  # Strain increment
-
-    # Call UMAT
-    updated_stress, jacobian, updated_state_vars = Utils.run_c_umat(r"C:\software_development\ConstitutiveModels\c_models\linear_elastic_with_vertical_tens_cutoff\linear_elastic_with_vertical_tens_cutoff.dll",
-        stress, state_vars, strain, dstrain, props
-    )
-
-    print("Updated stress:", updated_stress)
-    print("Updated state variables:", updated_state_vars)
-    print("Jacobian matrix:")
-    print(jacobian)
-

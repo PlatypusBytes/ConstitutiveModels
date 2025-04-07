@@ -91,11 +91,11 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     double K = E / (3.0 * (1.0 - 2.0 * nu));                 // Bulk modulus (optional, for checks)
 
     // --- 3. Calculate Elastic Stiffness Matrix (DDSDDE_elastic) ---
-    // Stored as a 1D array (NTENS * NTENS). Assuming column-major storage like Fortran.
+    // Stored as a 1D array (NTENS * NTENS). Assuming row-major storage like.
     // C = | C11 C12 C13  0   0   0  |   Indices (0-based C array):
-    //     | C12 C22 C23  0   0   0  |   Row 0: 0, 1, 2, 3, 4, 5
-    //     | C13 C23 C33  0   0   0  |   Row 1: 6, 7, 8, 9, 10, 11
-    //     |  0   0   0  C44  0   0  |   Row 2: 12, 13, 14, 15, 16, 17
+    //     | C12 C22 C23  0   0   0  |   col 0: 0, 1, 2, 3, 4, 5
+    //     | C13 C23 C33  0   0   0  |   col 1: 6, 7, 8, 9, 10, 11
+    //     |  0   0   0  C44  0   0  |   col 2: 12, 13, 14, 15, 16, 17
     //     |  0   0   0   0  C55  0  |   ... etc ...
     //     |  0   0   0   0   0  C66 |
     // C11 = C22 = C33 = lambda + 2G
