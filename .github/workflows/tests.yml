@@ -19,6 +19,31 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
+    - uses: actions/checkout@v3
+    - name: set up visual studio build tools
+      if: startsWith(runner.os, 'Windows')
+      uses: microsoft/setup-msbuild@v1.1
+      with:
+        vs-version: 2022
+
+    - name: build c dlls
+
+      if: startsWith(runner.os, 'Windows')
+      shell: cmd
+      run: call cd c_models/linear_elastic_with_vertical_tens_cutoff && call compile.bat && cd ../..
+
+    - name: Upload DLL artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: linear_elastic_dll
+        path: c_models/linear_elastic_with_vertical_tens_cutoff/linear_elastic_with_vertical_tens_cutoff.dll
+
+
+
+
+#      run: call c_models/linear_elastic_with_vertical_tens_cutoff/compile.bat
+
+
 #    - name: Install libGLU library on Ubuntu
 #      run: |
 #            if [ "$RUNNER_OS" == "Linux" ]; then
