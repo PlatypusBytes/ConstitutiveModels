@@ -32,11 +32,11 @@ jobs:
       shell: cmd
       run: call cd c_models/linear_elastic_with_vertical_tens_cutoff && call compile.bat && cd ../..
 
-    - name: Upload DLL artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: linear_elastic_dll
-        path: c_models/linear_elastic_with_vertical_tens_cutoff/linear_elastic_with_vertical_tens_cutoff.dll
+#    - name: Upload DLL artifact
+#      uses: actions/upload-artifact@v3
+#      with:
+#        name: linear_elastic_dll
+#        path: c_models/linear_elastic_with_vertical_tens_cutoff/linear_elastic_with_vertical_tens_cutoff.dll
 
 
 
