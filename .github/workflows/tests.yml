@@ -29,7 +29,7 @@ jobs:
     - name: Build C DLL
       run: |
         cd c_models/linear_elastic_with_vertical_tens_cutoff
-        call compile.bat
+        compile.bat
         cd ../..
 
 #    - name: Upload DLL artifact
