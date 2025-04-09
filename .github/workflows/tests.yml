@@ -21,10 +21,15 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Install Visual Studio Build Tools
-      run: |
-        choco install visualstudio2022buildtools --yes
-        refreshenv  
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1
+      with:
+        vs-installer-version: 2022  # Installs Visual Studio Build Tools
+
+#    - name: Install Visual Studio Build Tools
+#      run: |
+#        choco install visualstudio2022buildtools --yes
+#        refreshenv
 
 #    - name: set up visual studio build tools
 #      if: startsWith(runner.os, 'Windows')
