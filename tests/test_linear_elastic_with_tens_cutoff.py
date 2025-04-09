@@ -1,7 +1,6 @@
 import os
 import numpy as np
 
-
 from tests.incr_driver import IncrDriver
 
 
