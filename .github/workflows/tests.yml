@@ -31,9 +31,14 @@ jobs:
         call compile_c_models.bat
       shell: cmd
 
-    - name: Install Intel Fortran Compiler (ifx) with Chocolatey
+    - name: Set up Intel oneAPI
+      uses: oneapi-src/oneapi-ci@v1
+      with:
+        components: intel-oneapi-compiler-fortran
+
+    - name: Set up Intel oneAPI environment
       run: |
-          choco install intel-fortran
+        source /opt/intel/oneapi/setvars.sh
 
     - name: Build fortran DLLs
       run: |
