@@ -1,9 +1,11 @@
 import os
 import numpy as np
+import pytest
 
 from tests.incr_driver import IncrDriver
 
 
+pytest.skip("wip")
 def test_strain_controlled_compression_triaxial():
     """
     Test the strain controlled triaxial test with a tensile cutoff in the vertical direction. Where the sample is
@@ -24,7 +26,7 @@ def test_strain_controlled_compression_triaxial():
 
     project_dir = os.getcwd()
     const_model_info = {"language": "c",
-                        "file_name": f"{project_dir}\c_models\linear_elastic_with_vertical_tens_cutoff\linear_elastic_with_vertical_tens_cutoff.dll",
+                        "file_name": rf"{project_dir}\c_models\linear_elastic_with_vertical_tens_cutoff\linear_elastic_with_vertical_tens_cutoff.dll",
                         "properties": list(params.values()),
                         "state_vars": list(state_vars.values())}
 
@@ -58,7 +60,7 @@ def test_strain_controlled_compression_triaxial():
     np.testing.assert_allclose(incr_driver.strains, expected_strains, rtol=1e-6)
     np.testing.assert_allclose(incr_driver.stresses, expected_stresses, rtol=1e-6)
 
-
+pytest.skip("wip")
 def test_strain_controlled_tension_triaxial():
     """
     Test the strain controlled triaxial test with a tensile cutoff in the vertical direction. Where enough tension is

@@ -24,7 +24,7 @@ def test_strain_controlled_compression_triaxial():
 
     project_dir = os.getcwd()
     const_model_info = {"language": "c",
-                        "file_name": f"{project_dir}\c_models\linear_elastic_with_vertical_tens_cutoff\linear_elastic_with_vertical_tens_cutoff.dll",
+                        "file_name": rf"{project_dir}\c_models\linear_elastic_with_vertical_tens_cutoff\linear_elastic_with_vertical_tens_cutoff.dll",
                         "properties": list(params.values()),
                         "state_vars": list(state_vars.values())}
 
@@ -80,7 +80,7 @@ def test_strain_controlled_tension_triaxial():
 
     project_dir = os.getcwd()
     const_model_info = {"language": "c",
-                        "file_name": f"{project_dir}\c_models\linear_elastic_with_vertical_tens_cutoff\linear_elastic_with_vertical_tens_cutoff.dll",
+                        "file_name": rf"{project_dir}\c_models\linear_elastic_with_vertical_tens_cutoff\linear_elastic_with_vertical_tens_cutoff.dll",
                         "properties": list(params.values()),
                         "state_vars": list(state_vars.values())}
 
