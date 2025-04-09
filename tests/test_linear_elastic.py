@@ -5,7 +5,7 @@ import pytest
 from tests.incr_driver import IncrDriver
 
 
-pytest.skip("wip")
+@pytest.mark.skip("wip")
 def test_strain_controlled_compression_triaxial():
     """
     Test the strain controlled triaxial test with a tensile cutoff in the vertical direction. Where the sample is
@@ -60,7 +60,7 @@ def test_strain_controlled_compression_triaxial():
     np.testing.assert_allclose(incr_driver.strains, expected_strains, rtol=1e-6)
     np.testing.assert_allclose(incr_driver.stresses, expected_stresses, rtol=1e-6)
 
-pytest.skip("wip")
+@pytest.mark.skip("wip")
 def test_strain_controlled_tension_triaxial():
     """
     Test the strain controlled triaxial test with a tensile cutoff in the vertical direction. Where enough tension is
