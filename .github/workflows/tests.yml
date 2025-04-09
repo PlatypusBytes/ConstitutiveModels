@@ -15,7 +15,7 @@ jobs:
       matrix:
 #        os: [ubuntu-latest, windows-latest]
         os: [windows-latest]
-        python-version: [' 3.10', '3.11', '3.12']
+        python-version: ['3.11']
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -26,29 +26,20 @@ jobs:
       with:
         arch: x64
 
-    - name: Build C DLL
+    - name: Build C DLLs
       run: |
         call compile_c_models.bat
       shell: cmd
 
-#    - name: Upload DLL artifact
-#      uses: actions/upload-artifact@v3
-#      with:
-#        name: linear_elastic_dll
-#        path: c_models/linear_elastic_with_vertical_tens_cutoff/linear_elastic_with_vertical_tens_cutoff.dll
+    - name: Install Intel Fortran Compiler (ifx) with Chocolatey
+      run: |
+          choco install intel-fortran
 
+    - name: Build fortran DLLs
+      run: |
+        call compile_fortran_models.bat
+      shell: cmd
 
-
-
-#      run: call c_models/linear_elastic_with_vertical_tens_cutoff/compile.bat
-
-
-#    - name: Install libGLU library on Ubuntu
-#      run: |
-#            if [ "$RUNNER_OS" == "Linux" ]; then
-#                sudo apt-get install -y libglu1-mesa
-#            fi
-#      shell: bash
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
