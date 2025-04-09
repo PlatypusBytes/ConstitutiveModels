@@ -36,12 +36,9 @@ jobs:
       with:
         components: intel-oneapi-compiler-fortran
 
-    - name: Set up Intel oneAPI environment
-      run: |
-        source /opt/intel/oneapi/setvars.sh
-
     - name: Build fortran DLLs
       run: |
+        source /opt/intel/oneapi/setvars.sh
         call compile_fortran_models.bat
       shell: cmd
 
