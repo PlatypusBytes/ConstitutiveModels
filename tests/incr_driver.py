@@ -120,7 +120,8 @@ class IncrDriver:
         strains = []
 
         # loop over time steps
-        for t in range(self.n_time_steps+1):
+        for t in range(self.n_time_steps):
+
             delta_strain = np.copy(self.strain_increment)
             correction_delta_strain = np.zeros(self.voight_size)
             approx_delta_stress = np.zeros(self.voight_size)
@@ -137,19 +138,19 @@ class IncrDriver:
                 # get stress increment at stress controlled components, else zero
                 stress_increment = np.where(control_type, self.stress_increment, 0.0)
 
-                # compute undesired stress
-                u_d_stress = stress_increment - approx_delta_stress
+                # calculate the undesired stress
+                u_d_stress = stress_increment + approx_delta_stress
 
-                # calculate non linear iteration
+                # update the delta strain using the elastic matrix and the undesired stress
                 self.calculate_iteration(correction_delta_strain, u_d_stress, control_type, ddsdde)
 
                 # correct delta strain
-                delta_strain = delta_strain + correction_delta_strain
+                delta_strain = delta_strain - correction_delta_strain
 
                 # run constitutive model
                 if language == "c":
                     stress_updated, ddsdde, state_variables = Utils.run_c_umat(self.constitutive_model_info['file_name'],
-                                                                              self.initial_stress,
+                                                                              stress_vector,
                                                                               state_variables,
                                                                               strain_vector,
                                                                               delta_strain,
@@ -191,19 +192,19 @@ class IncrDriver:
             control_type (list): A list indicating the control type for each component (1 for stress, 0 for strain).
             elastic_matrix (np.ndarray): The elastic matrix used for calculations.
         """
-
         D = elastic_matrix
 
         # prevent NANs, if the matrix is singular, fill the diagonal with a small number
-        if np.linalg.det(D) == 0:
-            # matrix is singular fill diagonal with small number
-            for i in range(len(D)):
-                if np.abs(D[i,i]) < 1e-10:
-                    D[i,i] = 1e-10
+        diag_indices = np.diag_indices_from(D)
+        small_diagonal = np.abs(D[diag_indices]) < 1e-12
+        D[diag_indices][small_diagonal] = 1e-12  # or use np.finfo(float).eps for machine epsilon
+
+        control_type_array = np.array(control_type)
+        strain_controlled = control_type_array == 0
+        stress_controlled = control_type_array == 1
 
         # Apply strain-controlled updates to stress
-        strain_controlled = np.where(np.array(control_type) == 0)[0]
-        if strain_controlled.size > 0:
+        if np.any(strain_controlled):
             delta_stress = D[:, strain_controlled] @ strains[strain_controlled]
             stresses_copy = stresses - delta_stress
         else:
@@ -211,13 +212,12 @@ class IncrDriver:
 
         # if stresses are controlled, calculate strains at stress controlled indices,
         # i.e. solve eps = D^-1 * sigma
-        stress_controlled = np.where(np.array(control_type) == 1)[0]
-        if stress_controlled.size > 0:
+        if np.any(stress_controlled):
             reduced_D = D[np.ix_(stress_controlled, stress_controlled)]
             reduced_stresses = stresses_copy[stress_controlled]
 
-            reduced_strains = np.linalg.solve(reduced_D, reduced_stresses)
-            strains[stress_controlled] = reduced_strains
+            strains[stress_controlled] = np.linalg.solve(reduced_D, reduced_stresses)
 
-            # # Update full stresses with updated strains
-            # stresses[stress_controlled] = D[stress_controlled, :] @ strains
+        # Update full stresses with updated strains
+        if np.any(strain_controlled):
+            stresses[strain_controlled] = D[strain_controlled, :] @ strains

@@ -1,6 +1,6 @@
 #include <stdio.h>
-#include <math.h>
-#include <stdlib.h> // For exit() if needed, though usually avoided in UMAT
+//#include <math.h>
+//#include <stdlib.h> // For exit() if needed, though usually avoided in UMAT
 
 // Define necessary calling conventions and export macros (adjust for your compiler/system)
 // For MSVC on Windows:
@@ -8,15 +8,12 @@
 #define UMAT_EXPORT __declspec(dllexport)
 #define UMAT_CALLCONV __stdcall // Abaqus often uses stdcall
 #else
-    // For GCC/Clang on Linux/macOS (usually no special decoration needed)
+// For GCC/Clang on Linux/macOS (usually no special decoration needed)
 #define UMAT_EXPORT
 #define UMAT_CALLCONV
 #endif
 
 // Define the UMAT function signature expected by the FEA software.
-// NOTE: This is a C adaptation. Abaqus *officially* expects Fortran.
-//       Argument names match Fortran standard for clarity.
-//       Pointers are used for all arrays/outputs.
 //       Check your specific FEA software documentation for exact C interface requirements if available.
 //       Some systems might require all arguments to be pointers, even scalars.
 
@@ -88,7 +85,6 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     // --- 2. Calculate Elastic Constants ---
     double lambda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu)); // Lame's first parameter
     double G = E / (2.0 * (1.0 + nu));                     // Shear modulus (Lame's second parameter)
-    double K = E / (3.0 * (1.0 - 2.0 * nu));                 // Bulk modulus (optional, for checks)
 
     // --- 3. Calculate Elastic Stiffness Matrix (DDSDDE_elastic) ---
     // Stored as a 1D array (NTENS * NTENS). Assuming row-major storage like.
@@ -131,28 +127,22 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     DDSDDE_elastic[8] = C12; // C(1,2) index 8 = 1*6 + 2
     DDSDDE_elastic[13] = C12; // C(2,1) index 13 = 2*6 + 1
 
-
-    // --- 4. Calculate Strain at End of Increment ---
-    double strain_end[n_tens];
-    for (int i = 0; i < n_tens; ++i) {
-        strain_end[i] = STRAN[i] + DSTRAN[i];
-    }
-
     // --- 5. Calculate Elastic Trial Stress ---
-    // stress_trial = DDSDDE_elastic * strain_end
-
-    double stress_trial[n_tens];
+    double delta_stress[n_tens];
     for (int i = 0; i <n_tens; ++i) {
-        stress_trial[i] = 0.0;
+        delta_stress[i] = 0.0;
         double *row_ptr = &DDSDDE_elastic[i * n_tens]; // Pointer to the start of the row
         for (int j = 0; j < n_tens; ++j) {
-            // DDSDDE_elastic[row + col*NROWS] = DDSDDE_elastic[i + j*6]
-            stress_trial[i] += row_ptr[j] * strain_end[j];  // Row-major access (better for C), equivalent to:
-            // stress_trial[i] += DDSDDE_elastic[i* ntens + j] * strain_end[j];
 
-            //stress_trial[i] += DDSDDE_elastic[i + j * n_tens] * strain_end[j]; this is column based
+            delta_stress[i] += row_ptr[j] * DSTRAN[j];  // Row-major access (better for C), equivalent to:
+            // stress_trial[i] += DDSDDE_elastic[i* ntens + j] * DSTRAN[j];
         }
     }
+    double stress_trial[n_tens];
+    for  (int i = 0; i <n_tens; ++i) {
+        stress_trial[i] = STRESS[i] + delta_stress[i];
+    }
+
 
     // --- 6. Apply Tension Cutoff Logic ---
     // Check vertical stress component (sigma_yy, index 1)
@@ -166,12 +156,14 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     // --- 7. Update Stress, Jacobian, and State Variables ---
     if (tension_cutoff_active) {
         // Tension cutoff is active: Zero out all stresses and the Jacobian
-        for (int i = 0; i < n_tens; ++i) {
-            STRESS[i] = 0.0;
-        }
+
+        STRESS[1] = tension_threshold;
+
+        // set diagonal terms to a small value for numerical stability
+        double small_value = 1.0e-16; // Small value for numerical stability
+
         for (int i = 0; i < total_size; ++i) {
-            // Set Jacobian to zero (or a very small number for numerical stability if needed)
-            DDSDDE[i] = 0.0; // Or maybe 1.0e-12 * DDSDDE_elastic[i] ? Test this.
+            DDSDDE[i] = DDSDDE_elastic[i] * small_value;
         }
         STATEV[0] = 1.0; // Indicate cutoff state
     }
