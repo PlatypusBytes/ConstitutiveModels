@@ -20,11 +20,17 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
     - uses: actions/checkout@v3
-    - name: set up visual studio build tools
-      if: startsWith(runner.os, 'Windows')
-      uses: microsoft/setup-msbuild@v1.1
-      with:
-        vs-version: 2022
+
+    - name: Install Visual Studio Build Tools
+      run: |
+        choco install visualstudio2022buildtools --yes
+        refreshenv  
+
+#    - name: set up visual studio build tools
+#      if: startsWith(runner.os, 'Windows')
+#      uses: microsoft/setup-msbuild@v1.1
+#      with:
+#        vs-version: 2022
 
     - name: build c dlls
 
