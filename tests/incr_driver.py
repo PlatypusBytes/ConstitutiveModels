@@ -106,8 +106,16 @@ class IncrDriver:
                                             np.copy(state_variables),
                                             np.zeros(self.voight_size),
                                             np.zeros(self.voight_size),
-                                            self.constitutive_model_info["properties"])
+                                            self.constitutive_model_info["properties"], 0)
 
+
+        elif language == "fortran":
+            _, ddsdde, _ = Utils.run_fortran_umat(self.constitutive_model_info['file_name'],
+                                                  self.initial_stress,
+                                                  np.copy(state_variables),
+                                                  np.zeros(self.voight_size),
+                                                  np.zeros(self.voight_size),
+                                                  self.constitutive_model_info["properties"], 0)
 
         else:
             ValueError(f"Language {language} not supported. Only 'c' is supported.")
@@ -121,6 +129,9 @@ class IncrDriver:
 
         # loop over time steps
         for t in range(self.n_time_steps):
+
+            if t ==3:
+                a=1+1
 
             delta_strain = np.copy(self.strain_increment)
             correction_delta_strain = np.zeros(self.voight_size)
@@ -155,7 +166,15 @@ class IncrDriver:
                                                                               strain_vector,
                                                                               delta_strain,
                                                                               self.constitutive_model_info[
-                                                                                  "properties"])
+                                                                                  "properties"], t)
+                elif language == "fortran":
+                    stress_updated, ddsdde, state_variables = Utils.run_fortran_umat(self.constitutive_model_info['file_name'],
+                                                                              stress_vector,
+                                                                              state_variables,
+                                                                              strain_vector,
+                                                                              delta_strain,
+                                                                              self.constitutive_model_info[
+                                                                                  "properties"], t)
                 else:
                     ValueError(f"Language {language} not supported. Only 'c' is supported.")
 
