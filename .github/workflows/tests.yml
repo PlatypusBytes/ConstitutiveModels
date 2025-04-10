@@ -37,9 +37,7 @@ jobs:
         components: intel-oneapi-compiler-fortran
 
     - name: Build fortran DLLs
-      run: |
-        source /opt/intel/oneapi/setvars.sh
-        call compile_fortran_models.bat
+      run: call compile_fortran_models.bat
       shell: cmd
 
     - name: Set up Python ${{ matrix.python-version }}
