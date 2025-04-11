@@ -6,8 +6,7 @@ extern "C" {
 #endif
 
 
-void calculate_determinant_voight_vector(const double* vector,
-                                         double* determinant);
+void calculate_determinant_voigt_vector_3d(const double* vector, double* determinant);
 
 
 double vector_dot_product(const double* vec1, const double* vec2, int NTENS) ;

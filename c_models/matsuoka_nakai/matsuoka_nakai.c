@@ -2,6 +2,9 @@
 #include <math.h>
 
 #include "../utils.h"
+#include "../yield_surfaces/matsuoka_nakai_surface.h"
+#include "../stress_utils.h"
+
 //#include <stdlib.h> // For exit() if needed, though usually avoided in UMAT
 
 // Define necessary calling conventions and export macros (adjust for your compiler/system)
@@ -15,7 +18,7 @@
 #define UMAT_CALLCONV
 #endif
 
-#define ZERO_TOL 1.0e-10 // Tolerance for zero checks (q, denominators)
+#define ZERO_TOL 1.0e-12 // Tolerance for zero checks (q, denominators)
 #define PI 3.14159265358979323846
 
 // Define tensor component mapping (Voigt, 0-based)
@@ -28,20 +31,6 @@
 
 void calculate_elastic_stiffness(double E, double nu, double* DDSDDE, int NTENS);
 
-void calculate_stress_invariants(const double* stress, int NDI, int NSHR, int NTENS,
-                                 double* p, double* q, double* theta,
-                                 double* j2, double* j3, double* s_dev);
-
-void calculate_yield_function(double p, double theta,double q,
-                              double c, double phi_rad, double alpha, double beta, double gamma, double K, double M, double* f)    ;
-
-void calculate_stress_gradient(const double* s_dev, double p, double q, double theta,
-                               double j2, double j3,
-                               double angle_rad, // phi for df/dsigma, psi for dg/dsigma
-                               double M, double alpha, double beta, double gamma,
-                               int NTENS, double* grad); // Output gradient vector
-
-void calculate_matsuoka_nakai_constants(double *alpha, double *beta, double *gamma, double *K, double *M, double phi_rad, double c);
 
 // Define the UMAT function signature expected by the FEA software.
 //       Check your specific FEA software documentation for exact C interface requirements if available.
@@ -114,7 +103,6 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     }
 
 
-
     // --- 1. Material Properties ---
     double E_mod = PROPS[0];                // Young's Modulus
     double nu = PROPS[1];               // Poisson's Ratio
@@ -141,7 +129,9 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     double Ce_grad_g[6];  // Ce * grad_g
     double Ce_grad_f[6];  // Ce * grad_f
     double dEps_p[6];     // Plastic strain increment
-
+    double dp_dsig[6];
+    double dJ_dsig[6];
+    double dtheta_dsig[6];
 
     // --- 1. Calculate Elastic Stiffness Matrix ---
     calculate_elastic_stiffness(E_mod, nu, Ce_matrix, n_tensor);
@@ -158,13 +148,9 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         stress_trial[i] = STRESS[i] + Ce_grad_g[i];
     }
 
-
     // calculate invariants
-    double p_trial, q_trial, theta_trial, j2_trial, j3_trial;
-    calculate_stress_invariants(stress_trial, n_dim_dir, n_dim_shr, n_tensor,
-                                &p_trial, &q_trial, &theta_trial,
-                                &j2_trial, &j3_trial, s_dev); // s_dev also calculated here
-
+    double p_trial, J_trial, theta_trial, j2_trial, j3_trial;
+    calculate_stress_invariants_3d(stress_trial,&p_trial, &J_trial, &theta_trial, &j2_trial, &j3_trial, s_dev); // s_dev also calculated here
 
     // matsuoka nakai constants
     double alpha =0;
@@ -177,22 +163,27 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     double f_trial = 0.0;
 
     // Calculate yield function value
-    calculate_matsuoka_nakai_constants(&alpha, &beta, &gamma, &K, &M, phi_rad, c);
-    calculate_yield_function(p_trial, theta_trial,q_trial, c, phi_rad,alpha,beta,gamma,K,M, &f_trial);
+    calculate_matsuoka_nakai_constants(phi_rad, c, &alpha, &beta, &gamma, &K, &M);
+    calculate_yield_function(p_trial, theta_trial,J_trial, c, phi_rad,alpha,beta,gamma,K,M, &f_trial);
 
     // yield function greater than zero, calculate plastic correction
     if (f_trial > ZERO_TOL)
     {
 
         // gradient yield function
-        calculate_stress_gradient(s_dev, p_trial, q_trial, theta_trial,j2_trial, j3_trial,phi_rad, // phi for df/dsigma, psi for dg/dsigma
-                                   M, alpha, beta, gamma,
-                                   n_tensor, grad_f);
+        calculate_stress_invariants_derivatives_3d(J_trial, s_dev, j2_trial, j3_trial,dp_dsig,  dJ_dsig,  dtheta_dsig);
+
+
+        double mats_nak_constants[5] = {phi_rad, M, alpha, beta, gamma};
+
+        calculate_yield_gradient(theta_trial, J_trial, mats_nak_constants, dp_dsig, dJ_dsig, dtheta_dsig, grad_f);
 
         // gradient potential function, g, it is required to recalculate the constants using psi
-        calculate_matsuoka_nakai_constants(&alpha, &beta, &gamma, &K, &M, psi_rad, c);
-        calculate_stress_gradient(s_dev, p_trial, q_trial, theta_trial,j2_trial, j3_trial,psi_rad, // phi for df/dsigma, psi for dg/dsigma
-                               M, alpha, beta, gamma, n_tensor, grad_g);
+        calculate_matsuoka_nakai_constants(psi_rad, c, &alpha, &beta, &gamma, &K, &M);
+        double mats_nak_constants_plastic_potential[5] ={psi_rad, M, alpha, beta, gamma};
+
+        calculate_yield_gradient(theta_trial, J_trial, mats_nak_constants_plastic_potential, dp_dsig, dJ_dsig, dtheta_dsig, grad_g);
+
 
         // Calculate terms needed for delta_gamma and Jacobian
         matrix_vector_multiply(Ce_matrix, grad_g, n_tensor, Ce_grad_g); // Ce * g
@@ -247,7 +238,6 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         }
 
      *SCD = 0.0; // No creep
-
     return;
 
 }
@@ -284,224 +274,4 @@ void calculate_elastic_stiffness(double E, double nu, double* DDSDDE, int NTENS)
     DDSDDE[3 * NTENS + 3] = G;      // C_1212 (row 3, col 3)
     DDSDDE[4 * NTENS + 4] = G;      // C_2323 (row 4, col 4)
     DDSDDE[5 * NTENS + 5] = G;      // C_1313 (row 5, col 5)
-}
-
-void calculate_stress_invariants(const double* stress, int NDI, int NSHR, int NTENS,
-                                 double* p, double* q, double* theta,
-                                 double* j2, double* j3, double* s_dev) // s_dev is output
-{
-    if (NTENS != 6) return;
-
-    // Mean stress (pressure p = -trace(sigma)/3, but often p = trace(sigma)/3 in geomech)
-    *p = (stress[XX] + stress[YY] + stress[ZZ]) / 3.0;
-
-    // Deviatoric stress tensor s = sigma - p * I
-    s_dev[XX] = stress[XX] - *p;
-    s_dev[YY] = stress[YY] - *p;
-    s_dev[ZZ] = stress[ZZ] - *p;
-    s_dev[XY] = stress[XY];
-    s_dev[YZ] = stress[YZ];
-    s_dev[XZ] = stress[XZ];
-
-    // Second invariant of deviatoric stress J2 = 0.5 * s:s
-    // J2 = 0.5 * (sxx^2 + syy^2 + szz^2) + sxy^2 + syz^2 + sxz^2
-     *j2 = 0.5 * (s_dev[XX] * s_dev[XX] + s_dev[YY] * s_dev[YY] + s_dev[ZZ] * s_dev[ZZ])
-         + (s_dev[XY] * s_dev[XY] + s_dev[YZ] * s_dev[YZ] + s_dev[XZ] * s_dev[XZ]);
-
-    // this is not the same as the von Mises stress, todo check this
-    *q = sqrt((*j2));
-
-    // Third invariant of deviatoric stress J3 = det(s)
-    // J3 = sxx*syy*szz + 2*sxy*syz*sxz - sxx*syz^2 - syy*sxz^2 - szz*sxy^2
-
-    calculate_determinant_voight_vector(s_dev, j3);
-
-    // Lode angle theta
-    // sin(3*theta) = - (J3 / 2) * (3 / J2)^(3/2) = - (3 * sqrt(3) / 2) * (J3 / q^3) if q!=0
-    // or sin(3*theta) = - sqrt(27/8) * J3 / J2^(3/2)
-
-    //double arg = (3.0 * sqrt(3.0) / 2.0) * (*j3) / pow(*q, 3.0);
-    if (*q > ZERO_TOL) { // Avoid division by zero if q is very small
-        //double arg = - (3.0 * sqrt(3.0) / 2.0) * (*j3) / pow(*q, 3.0);
-
-        double arg = ( sqrt(27.0) / 2.0) * (*j3) / pow(*j2, 1.5);
-
-//
-        // Clamp argument to asin range [-1, 1] due to potential numerical inaccuracies
-        if (arg > 1.0) arg = 1.0;
-        if (arg < -1.0) arg = -1.0;
-
-        *theta = asin(arg) / 3.0; // Result is in [-pi/6, pi/6]
-    } else {
-         *theta = 0.0; // Set to convention if q is zero
-    }
-
-    if (*theta < -(PI / 6.0) + ZERO_TOL){
-    *theta = -(PI / 6.0) + ZERO_TOL;
-    }
-    else if (*theta > (PI / 6.0) - ZERO_TOL){
-    *theta = (PI / 6.0) - ZERO_TOL;
-    }
-
-     // Ensure theta is within [-pi/6, pi/6] range
-     // (asin should already handle this, but double check if implementing manually)
-}
-
-
-void calculate_yield_function(double p, double theta,double q,
-                              double c, double phi_rad, double alpha, double beta, double gamma, double K, double M, double* f)
-{
-
-//        fprintf(stderr, "calculate_yield_function: p = %f, theta = %f, q = %f, c = %f, phi_rad = %f, alpha = %f, beta = %f, gamma = %f, K = %f, M = %f\n",
-//                p, theta, q, c, phi_rad, alpha, beta, gamma, K, M);
-
-//        self.yield_residual = (-self.K + self.M * self.stress_utils.mean_stress) + J * self.alpha * np.cos(
-//            np.acos(self.beta * np.sin(3 * self.stress_utils.lode_angle)) / 3 - self.gamma * np.pi / 6)
-
-
-        *f  = (-K + M * p) + q * alpha * cos(acos(beta * sin(3.0 * theta)) / 3.0 - gamma * PI / 6.0);
-
-//        fprintf(stderr, "calculate_yield_function inside: f = %f\n", *f);
-
-        // in paper:
-        //*f  = -(K + M * p) + q * alpha * cos(acos(beta * sin(3 * theta)) / 3 - gamma * PI / 6);
-
- }
-
-
-
- void calculate_stress_gradient(const double* s_dev, double p, double q, double theta,
-                               double j2, double j3,
-                               double angle_rad, // phi for df/dsigma, psi for dg/dsigma
-                               double M, double alpha, double beta, double gamma,
-                               int NTENS, double* grad) // Output gradient vector
-{
-    if (NTENS != 6) return;
-
-    // Computes df/dsigma or dg/dsigma based on the angle provided
-    // Uses chain rule: grad = (dF/dp)*(dp/dsig) + (dF/dq)*(dq/dsig) + (dF/dtheta)*(dtheta/dsig)
-    // where F is the yield function f or potential g, using angle_rad.
-
-    // Initialize gradient to zero
-    for (int i = 0; i < NTENS; ++i) grad[i] = 0.0;
-
-
-    // --- Components for Chain Rule ---
-    double sin_angle = sin(angle_rad);
-    double cos_angle = cos(angle_rad); // Needed if using the c*cos(angle) form
-
-    // 1. Derivatives of F (yield/potential function) w.r.t. invariants
-    double C1 = alpha * cos(acos(beta * sin(3.0 * theta)) / 3.0 - gamma * PI / 6.0);
-
-     double dF_dp = M;
-//    double dF_dp = -M;
-     double dF_dq = C1;
-
-    // ai generated, check
-    double dC1_dtheta = alpha * beta * cos(3 * theta) * sin(acos(beta * sin(3.0 * theta)) / 3.0 - gamma * PI / 6.0) / sqrt(1.0 - beta*beta * pow(sin(3.0 * theta),2.0));
-    double dF_dtheta = q * dC1_dtheta;
-
-
-    // 2. Derivatives of invariants w.r.t. sigma (in Voigt)
-    // dp/dsigma = [1/3, 1/3, 1/3, 0, 0, 0]^T
-    double dp_dsig[6] = {1.0/3.0, 1.0/3.0, 1.0/3.0, 0.0, 0.0, 0.0};
-
-    double dq_dsig[6];
-    if (q < ZERO_TOL) {
-        // Handle case where q is very small or zero
-        for (int i = 0; i < NTENS; ++i) {
-            dq_dsig[i] = 0.0; // Set to zero or some other value as needed
-        }
-
-    }
-    else {
-            dq_dsig[0] =s_dev[XX] / (2.0*q);
-            dq_dsig[1] =s_dev[YY] / (2.0*q);
-            dq_dsig[2] =s_dev[ZZ] / (2.0*q);
-            dq_dsig[3] =s_dev[XY] / q;
-            dq_dsig[4] =s_dev[YZ] / q;
-            dq_dsig[5] =s_dev[XZ] / q;
-
-    }
-
-
-    // dtheta/dsigma = (dtheta/dJ2)*(dJ2/dsig) + (dtheta/dJ3)*(dJ3/dsig)
-    // This is the complex part, requires dJ2/dsig, dJ3/dsig, dtheta/dJ2, dtheta/dJ3
-
-    // dJ2/dsigma = s_dev (Voigt)
-    //const double* dJ2_dsig = s_dev; // Pointer assignment is fine
-    double dJ2_dsig[6] = {s_dev[XX], s_dev[YY], s_dev[ZZ], 2.0*s_dev[XY], 2.0*s_dev[YZ], 2.0*s_dev[XZ]};
-
-
-    double dJ3_dsig[6];
-
-
-    double term1 = s_dev[XX]*s_dev[XX] + s_dev[XY]*s_dev[XY] + s_dev[XZ]*s_dev[XZ] - 2.0*j2/3.0; // s_xx^2 + s_xy^2 + s_xz^2 - 2/3 * J2
-    double term2 = s_dev[YY]*s_dev[YY] + s_dev[XY]*s_dev[XY] + s_dev[YZ]*s_dev[YZ] - 2.0*j2/3.0; // s_yy^2 + s_xy^2 + s_yz^2 - 2/3 * J2
-    double term3 = s_dev[ZZ]*s_dev[ZZ] + s_dev[YZ]*s_dev[YZ] + s_dev[XZ]*s_dev[XZ] - 2.0*j2/3.0; // s_zz^2 + s_yz^2 + s_xz^2 - 2/3 * J2
-    double term4 = 2.0*((s_dev[XX] + s_dev[YY])*s_dev[XY] + s_dev[XZ]*s_dev[YZ]); // 2*((s_xx+s_yy)*s_xy + s_xz*s_yz)
-    double term5 = 2.0*((s_dev[YY] + s_dev[ZZ])*s_dev[YZ] + s_dev[XY]*s_dev[XZ]); // 2*((s_yy+s_zz)*s_yz + s_xy*s_xz)
-    double term6 = 2.0*((s_dev[ZZ] + s_dev[XX])*s_dev[XZ] + s_dev[XY]*s_dev[YZ]); // 2*((s_zz+s_xx)*s_xz + s_xy*s_yz)
-
-    dJ3_dsig[XX] = term1;
-    dJ3_dsig[YY] = term2;
-    dJ3_dsig[ZZ] = term3;
-    dJ3_dsig[XY] = term4;
-    dJ3_dsig[YZ] = term5;
-    dJ3_dsig[XZ] = term6;
-
-    double dtheta_dJ2 = 0.0;
-    double dtheta_dJ3 = 0.0;
-
-    double j2_pow_3 = pow(j2, 3);
-
-    double inner_term = 1.0- (27.0 * j3 * j3) / (4.0 * pow(j2, 3.0));
-
-    if (inner_term < ZERO_TOL) {
-        dtheta_dJ2 = 0.0;
-        dtheta_dJ3= 0.0;
-    }
-    else {
-        dtheta_dJ2 = -pow(3.0, 1.5) * j3 / (4.0* pow(j2,2.5) * sqrt(inner_term));
-        dtheta_dJ3 = sqrt(3.0) / sqrt(4.0*pow(j2, 3.0) -27.0 * j3 * j3) ;
-    }
-
-    // dtheta/dsigma = dtheta_dJ2 * dJ2_dsig + dtheta_dJ3 * dJ3_dsig
-    double dtheta_dsig[6];
-    for(int i=0; i<NTENS; ++i) {
-        dtheta_dsig[i] = dtheta_dJ2 * dJ2_dsig[i] + dtheta_dJ3 * dJ3_dsig[i];
-    }
-
-    // 3. Combine using chain rule: grad = dF_dp*dp_dsig + dF_dq*dq_dsig + dF_dtheta*dtheta_dsig
-    for (int i = 0; i < NTENS; ++i) {
-        grad[i] = dF_dp * dp_dsig[i] + dF_dq * dq_dsig[i] + dF_dtheta * dtheta_dsig[i];
-    }
-}
-
-
-void calculate_matsuoka_nakai_constants(double *alpha, double *beta, double *gamma, double *K, double *M, double phi_rad, double c)
-{
-        //if phi_rad is zero, return tresca constants
-        if (phi_rad < ZERO_TOL)
-        {
-            *M = 0;
-            *K = 0;
-            *alpha = 1 / (cos(PI / 6));
-            *beta = 0.9999;
-            *gamma = 1;
-        }
-        // else Matsuaoka Nakai constants
-        else{
-
-            *M = 1.0 / sqrt(3.0) * 6.0 * sin(phi_rad) / (3.0 - sin(phi_rad));
-            *K = c / tan(phi_rad);
-            double k_mn = (9.0 -pow(sin(phi_rad),2)) / (1.0 - pow(sin(phi_rad),2.0));
-            double A1 = (k_mn - 3.0) / (k_mn - 9.0);
-            double A2 = k_mn / (k_mn - 9.0);
-
-            *alpha = 2.0 / sqrt(3.0) * sqrt(A1) * *M;
-            *beta = A2 / (pow(A1,1.5));
-            *gamma = 0.0;
-
-        }
 }

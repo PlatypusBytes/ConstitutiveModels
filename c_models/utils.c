@@ -1,7 +1,8 @@
 #include "utils.h"
+#define VOIGTSIZE_3D 6
 
-void calculate_determinant_voight_vector(const double* vector,
-                                         double* determinant)
+
+void calculate_determinant_voigt_vector_3d(const double vector[VOIGTSIZE_3D], double* determinant)
 {
     // Calculate the determinant of a 3x3 matrix represented as a Voigt vector
     // vector = [sxx, syy, szz, sxy, syz, sxz]
