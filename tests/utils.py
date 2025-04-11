@@ -333,7 +333,7 @@ class Utils:
         # Call UMAT function without temperature and predefined field variables
         lib.umat(
             c_stress, c_statev, c_ddsdde,
-            c_sse, c_spd, c_scd, c_rpl,
+            c_sse, c_spd, c_scd, ffi.NULL,
             ffi.NULL, ffi.NULL, ffi.NULL,  # DDSDDT, DRPLDE, DRPLDT (null)
             c_strain, c_dstrain, c_time, c_dtime,
             ffi.NULL, ffi.NULL, ffi.NULL, ffi.NULL,  # TEMP, DTEMP, PREDEF, DPRED (null)
@@ -342,7 +342,7 @@ class Utils:
             ffi.NULL,  # COORDS (null)
             ffi.NULL, # DROT (null)
             ffi.NULL, ffi.NULL, ffi.NULL, ffi.NULL,  # PNEWDT, CELENT, DFGRD0, DFGRD1 (null)
-            c_noel, c_npt, c_layer, c_kspt, c_kstep, c_kinc
+            c_noel, c_npt, ffi.NULL, ffi.NULL, c_kstep, c_kinc
         )
 
         # Convert C arrays back to numpy arrays

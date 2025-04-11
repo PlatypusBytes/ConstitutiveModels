@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <math.h>
+
+#include "../utils.h"
 //#include <stdlib.h> // For exit() if needed, though usually avoided in UMAT
 
 // Define necessary calling conventions and export macros (adjust for your compiler/system)
@@ -25,8 +27,6 @@
 #define XZ 5
 
 void calculate_elastic_stiffness(double E, double nu, double* DDSDDE, int NTENS);
-void matrix_vector_multiply(const double* matrix, const double* vector, int NTENS, double* result);
-double vector_dot_product(const double* vec1, const double* vec2, int NTENS);
 
 void calculate_stress_invariants(const double* stress, int NDI, int NSHR, int NTENS,
                                  double* p, double* q, double* theta,
@@ -43,10 +43,6 @@ void calculate_stress_gradient(const double* s_dev, double p, double q, double t
 
 void calculate_matsuoka_nakai_constants(double *alpha, double *beta, double *gamma, double *K, double *M, double phi_rad, double c);
 
-void calculate_determinant_voight_vector(const double* vector,
-                                         double* determinant);
-
-void calculate_outer_product_term(double *v1, double *v2, double denom, int N, double result[6][6]);
 // Define the UMAT function signature expected by the FEA software.
 //       Check your specific FEA software documentation for exact C interface requirements if available.
 //       Some systems might require all arguments to be pointers, even scalars.
@@ -118,13 +114,13 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     }
 
 
+
     // --- 1. Material Properties ---
     double E_mod = PROPS[0];                // Young's Modulus
     double nu = PROPS[1];               // Poisson's Ratio
     double c = PROPS[2];                // Cohesion (not used in this example)
     double phi_deg = PROPS[3];              // Friction angle (not used in this example)
     double psi_deg = PROPS[4];               // Dilation angle (not used in this example)
-
 
     // Convert angles to radians
     double phi_rad = phi_deg * PI / 180.0;
@@ -133,13 +129,8 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     double cos_phi = cos(phi_rad);
     double sin_psi = sin(psi_rad);
 
-        // Elastic constants
-//    double G = E_mod / (2.0 * (1.0 + nu)); // Shear modulus (mu)
-//    double K_bulk = E_mod / (3.0 * (1.0 - 2.0 * nu)); // Bulk modulus
-
     // State variables
     double peeq_n = STATEV[0]; // Equivalent plastic strain at start of increment
-
 
         // Local arrays
     double stress_trial[6];
@@ -168,30 +159,28 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     }
 
 
-        // --- 3. Yield Check ---
+    // calculate invariants
     double p_trial, q_trial, theta_trial, j2_trial, j3_trial;
     calculate_stress_invariants(stress_trial, n_dim_dir, n_dim_shr, n_tensor,
                                 &p_trial, &q_trial, &theta_trial,
                                 &j2_trial, &j3_trial, s_dev); // s_dev also calculated here
-        //fprintf(stderr, "(5) :  j3 = %f, q = %f\n",j3_trial, q_trial);
 
+
+    // matsuoka nakai constants
     double alpha =0;
     double beta =0;
     double gamma =0;
     double K =0;
     double M =0;
 
-    calculate_matsuoka_nakai_constants(&alpha, &beta, &gamma, &K, &M, phi_rad, c);
-
+    // yield function
     double f_trial = 0.0;
+
+    // Calculate yield function value
+    calculate_matsuoka_nakai_constants(&alpha, &beta, &gamma, &K, &M, phi_rad, c);
     calculate_yield_function(p_trial, theta_trial,q_trial, c, phi_rad,alpha,beta,gamma,K,M, &f_trial);
 
-    //fprintf(stderr, "f_trial = %f \n", f_trial);
-//    fprintf(stderr, "(1) calculate_yield_function: stress_trial = %f, %f, %f, %f, %f, %f\n",
-//            stress_trial[0], stress_trial[1], stress_trial[2], stress_trial[3], stress_trial[4], stress_trial[5]);
-//        fprintf(stderr, "(2) calculate_yield_function inside: f = %f\n", f_trial);
-//        fprintf(stderr, "(3) calculate_yield_function: p_trial = %f, theta_trial = %f, q_trial = %f, c = %f, phi_rad = %f, alpha = %f, beta = %f, gamma = %f, K = %f, M = %f\n",
-//                p_trial, theta_trial, q_trial, c, phi_rad, alpha, beta, gamma, K, M);
+    // yield function greater than zero, calculate plastic correction
     if (f_trial > ZERO_TOL)
     {
 
@@ -200,7 +189,7 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
                                    M, alpha, beta, gamma,
                                    n_tensor, grad_f);
 
-        // gradient potential function
+        // gradient potential function, g, it is required to recalculate the constants using psi
         calculate_matsuoka_nakai_constants(&alpha, &beta, &gamma, &K, &M, psi_rad, c);
         calculate_stress_gradient(s_dev, p_trial, q_trial, theta_trial,j2_trial, j3_trial,psi_rad, // phi for df/dsigma, psi for dg/dsigma
                                M, alpha, beta, gamma, n_tensor, grad_g);
@@ -216,7 +205,6 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         double denom = vector_dot_product(grad_f, Ce_grad_g, n_tensor);
         double delta_gamma = f_trial / denom;
 
-
         // --- Update Stress ---
         // STRESS_{n+1} = stress_trial - delta_gamma * Ce * g_vec
         for (i = 0; i < n_tensor; ++i) {
@@ -229,12 +217,10 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
             dEps_p[i] = delta_gamma * grad_g[i];
         }
         double dSpd = vector_dot_product(STRESS, dEps_p, n_tensor);
-        *SPD += dSpd; // SPD is accumulated by ABAQUS, we provide increment
+        *SPD += dSpd;
 
         // --- Calculate Consistent Tangent Modulus (Jacobian DDSDDE) ---
-        // DDSDDE = Ce - (Ce * g) dyadic_prod (Ce * f)^T / denom
-        // (Using gradients evaluated at trial state - simplification)
-        // More accurate tangent requires gradients at final state or algorithmic tangent.
+        // DDSDDE = Ce - (Ce * g) cross_prod (Ce * f)^T / denom
         if (fabs(denom) > ZERO_TOL) { // Redundant check, but safe
             for (i = 0; i < n_tensor; ++i) {
                 for (j = 0; j < n_tensor; ++j) {
@@ -243,31 +229,24 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
                 }
             }
         }
-
     }
     else{
-    fprintf(stderr, "elastic step: f_trial = %f \n", f_trial);
+
         // --- Elastic Step ---
         // No yield, treat as elastic
         // STRESS_{n+1} = stress_trial
         // DDSDDE remains Ce_matrix (already set)
         // STATEV[0] remains peeq_n
-        // SPD remains unchanged this increment
 
-        // --- Update Stress ---
-        // STRESS_{n+1} = stress_trial
 
-    // Case where delta_gamma became zero or negative, treat as elastic}
         for (i = 0; i < n_tensor; ++i) {
             STRESS[i] = stress_trial[i]; // Use trial stress
         }
         // DDSDDE remains Ce_matrix
         // STATEV[0] remains peeq_n
-        // SPD remains unchanged this increment
         }
 
      *SCD = 0.0; // No creep
-     *RPL = 0.0; // Volumetric plastic strain - could calculate from trace(dEps_p) if needed
 
     return;
 
@@ -307,28 +286,6 @@ void calculate_elastic_stiffness(double E, double nu, double* DDSDDE, int NTENS)
     DDSDDE[5 * NTENS + 5] = G;      // C_1313 (row 5, col 5)
 }
 
-
-void matrix_vector_multiply(const double* matrix, const double* vector, int NTENS, double* result) {
-    // Assumes matrix is row-major 1D array of size NTENS*NTENS
-    for (int i = 0; i < NTENS; ++i) {
-        result[i] = 0.0;
-        for (int j = 0; j < NTENS; ++j) {
-            result[i] += matrix[i * NTENS + j] * vector[j];
-        }
-    }
-}
-
-double vector_dot_product(const double* vec1, const double* vec2, int NTENS) {
-    // Simple dot product for Voigt vectors (no factors of 2 needed here)
-    double dot = 0.0;
-    for (int i = 0; i < NTENS; ++i) {
-        dot += vec1[i] * vec2[i];
-    }
-    return dot;
-    }
-
-
-
 void calculate_stress_invariants(const double* stress, int NDI, int NSHR, int NTENS,
                                  double* p, double* q, double* theta,
                                  double* j2, double* j3, double* s_dev) // s_dev is output
@@ -351,19 +308,8 @@ void calculate_stress_invariants(const double* stress, int NDI, int NSHR, int NT
      *j2 = 0.5 * (s_dev[XX] * s_dev[XX] + s_dev[YY] * s_dev[YY] + s_dev[ZZ] * s_dev[ZZ])
          + (s_dev[XY] * s_dev[XY] + s_dev[YZ] * s_dev[YZ] + s_dev[XZ] * s_dev[XZ]);
 
-
-//    // Von Mises equivalent stress q = sqrt(3 * J2)
-//    if (*j2 < ZERO_TOL * ZERO_TOL) { // Handle hydrostatic case J2 -> 0
-//        *q = 0.0;
-//        *j2 = 0.0;
-//        *j3 = 0.0;
-//        *theta = 0.0; // Lode angle is undefined, convention often sets it to 0 or pi/6
-//        return;
-//    }
-
     // this is not the same as the von Mises stress, todo check this
     *q = sqrt((*j2));
-
 
     // Third invariant of deviatoric stress J3 = det(s)
     // J3 = sxx*syy*szz + 2*sxy*syz*sxz - sxx*syz^2 - syy*sxz^2 - szz*sxy^2
@@ -469,7 +415,6 @@ void calculate_yield_function(double p, double theta,double q,
 
     }
     else {
-
             dq_dsig[0] =s_dev[XX] / (2.0*q);
             dq_dsig[1] =s_dev[YY] / (2.0*q);
             dq_dsig[2] =s_dev[ZZ] / (2.0*q);
@@ -479,7 +424,6 @@ void calculate_yield_function(double p, double theta,double q,
 
     }
 
-//    fprintf( stderr, "dq_dsig = %f, %f, %f, %f, %f, %f\n", dq_dsig[0], dq_dsig[1], dq_dsig[2], dq_dsig[3], dq_dsig[4], dq_dsig[5]);
 
     // dtheta/dsigma = (dtheta/dJ2)*(dJ2/dsig) + (dtheta/dJ3)*(dJ3/dsig)
     // This is the complex part, requires dJ2/dsig, dJ3/dsig, dtheta/dJ2, dtheta/dJ3
@@ -514,7 +458,6 @@ void calculate_yield_function(double p, double theta,double q,
     double inner_term = 1.0- (27.0 * j3 * j3) / (4.0 * pow(j2, 3.0));
 
     if (inner_term < ZERO_TOL) {
-        fprintf(stderr, "inner_term is negative or zero, setting dtheta_dJ2 to 0\n");
         dtheta_dJ2 = 0.0;
         dtheta_dJ3= 0.0;
     }
@@ -536,12 +479,8 @@ void calculate_yield_function(double p, double theta,double q,
 }
 
 
-
-
-void calculate_matsuoka_nakai_constants(double *alpha, double *beta, double *gamma, double *K, double *M, double phi_rad, double psi_rad, double c)
+void calculate_matsuoka_nakai_constants(double *alpha, double *beta, double *gamma, double *K, double *M, double phi_rad, double c)
 {
-
-
         //if phi_rad is zero, return tresca constants
         if (phi_rad < ZERO_TOL)
         {
@@ -564,26 +503,5 @@ void calculate_matsuoka_nakai_constants(double *alpha, double *beta, double *gam
             *beta = A2 / (pow(A1,1.5));
             *gamma = 0.0;
 
-//            fprintf(stderr, "calculate_matsuoka_nakai_constants: alpha = %f, beta = %f, gamma = %f, K = %f, M = %f, A1 = %f, A2 = %f, k_mn = %f\n",
-//                    *alpha, *beta, *gamma, *K, *M, A1, A2, k_mn);
-
         }
 }
-
-void calculate_determinant_voight_vector(const double* vector,
-                                         double* determinant)
-{
-    // Calculate the determinant of a 3x3 matrix represented as a Voigt vector
-    // vector = [sxx, syy, szz, sxy, syz, sxz]
-    *determinant = vector[XX] * (vector[YY] * vector[ZZ] - vector[XY] * vector[XY])
-                - vector[XY] * (vector[XY] * vector[ZZ] - vector[YZ] * vector[XZ])
-                + vector[XZ] * (vector[XY] * vector[YZ] - vector[YY] * vector[XZ]);
-
-//        *determinant = vector[0] * (vector[1] * vector[2] - vector[4] * vector[4])
-//                - vector[3] * (vector[3] * vector[2] - vector[4] * vector[5])
-//                + vector[4] * (vector[3] * vector[1] - vector[4] * vector[5]);
-}
-
-
-
-
