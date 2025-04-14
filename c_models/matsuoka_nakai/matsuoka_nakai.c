@@ -4,6 +4,7 @@
 #include "../utils.h"
 #include "../yield_surfaces/matsuoka_nakai_surface.h"
 #include "../stress_utils.h"
+#include "../globals.h"
 
 //#include <stdlib.h> // For exit() if needed, though usually avoided in UMAT
 
@@ -18,16 +19,6 @@
 #define UMAT_CALLCONV
 #endif
 
-#define ZERO_TOL 1.0e-12 // Tolerance for zero checks (q, denominators)
-#define PI 3.14159265358979323846
-
-// Define tensor component mapping (Voigt, 0-based)
-#define XX 0
-#define YY 1
-#define ZZ 2
-#define XY 3
-#define YZ 4
-#define XZ 5
 
 void calculate_elastic_stiffness(double E, double nu, double* DDSDDE, int NTENS);
 

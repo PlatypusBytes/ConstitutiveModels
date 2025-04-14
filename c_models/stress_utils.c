@@ -1,19 +1,7 @@
 #include <math.h>
-
+#include "globals.h"
 #include "utils.h"
 #include "stress_utils.h"
-
-#define PI 3.14159265358979323846
-#define ZERO_TOL 1.0e-12 // Tolerance for zero checks
-#define VOIGTSIZE_3D 6
-
-// Define tensor component mapping (Voigt, 0-based)
-#define XX 0
-#define YY 1
-#define ZZ 2
-#define XY 3
-#define YZ 4
-#define XZ 5
 
 
 void calculate_stress_invariants_3d(const double stress[VOIGTSIZE_3D],
@@ -85,7 +73,6 @@ void calculate_stress_invariants_derivatives_3d(const double J, const double s_d
         for (int i = 0; i < VOIGTSIZE_3D; ++i) {
             dJ_dsig[i] = 0.0; // Set to zero or some other value as needed
         }
-
     }
     else {
             dJ_dsig[0] =s_dev[XX] / (2.0*J);
@@ -94,7 +81,6 @@ void calculate_stress_invariants_derivatives_3d(const double J, const double s_d
             dJ_dsig[3] =s_dev[XY] / J;
             dJ_dsig[4] =s_dev[YZ] / J;
             dJ_dsig[5] =s_dev[XZ] / J;
-
     }
 
 
@@ -105,7 +91,6 @@ void calculate_stress_invariants_derivatives_3d(const double J, const double s_d
     double dJ2_dsig[VOIGTSIZE_3D] = {s_dev[XX], s_dev[YY], s_dev[ZZ], 2.0*s_dev[XY], 2.0*s_dev[YZ], 2.0*s_dev[XZ]};
 
     double dJ3_dsig[VOIGTSIZE_3D];
-
     dJ3_dsig[XX] = s_dev[XX]*s_dev[XX] + s_dev[XY]*s_dev[XY] + s_dev[XZ]*s_dev[XZ] - 2.0*j2/3.0; // s_xx^2 + s_xy^2 + s_xz^2 - 2/3 * J2
     dJ3_dsig[YY] = s_dev[YY]*s_dev[YY] + s_dev[XY]*s_dev[XY] + s_dev[YZ]*s_dev[YZ] - 2.0*j2/3.0; // s_yy^2 + s_xy^2 + s_yz^2 - 2/3 * J2
     dJ3_dsig[ZZ] = s_dev[ZZ]*s_dev[ZZ] + s_dev[YZ]*s_dev[YZ] + s_dev[XZ]*s_dev[XZ] - 2.0*j2/3.0; // s_zz^2 + s_yz^2 + s_xz^2 - 2/3 * J2
