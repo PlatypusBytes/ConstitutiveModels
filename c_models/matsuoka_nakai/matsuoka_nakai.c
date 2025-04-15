@@ -5,6 +5,7 @@
 #include "../stress_utils.h"
 #include "../utils.h"
 #include "../yield_surfaces/matsuoka_nakai_surface.h"
+#include "../elastic_laws/hookes_law.h"
 
 // Define necessary calling conventions and export macros (adjust for your compiler/system)
 // For MSVC on Windows:
@@ -16,8 +17,6 @@
 #define UMAT_EXPORT
 #define UMAT_CALLCONV
 #endif
-
-void calculate_elastic_stiffness(double E, double nu, double* DDSDDE, int NTENS);
 
 // Define the UMAT function signature expected by the FEA software.
 //       Check your specific FEA software documentation for exact C interface requirements if
@@ -73,7 +72,7 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     int n_tensor  = *NTENS; // Should be 6 for 3D
 
     // --- 0. Check Inputs ---
-    if (*NTENS != 6 || *NDI != 3 || *NSHR != 3) {
+    if (*NTENS != VOIGTSIZE_3D || *NDI != 3 || *NSHR != 3) {
         // Handle error - This UMAT is specifically for 3D
         // For simplicity, we'll print an error and potentially stop (though stopping is usually bad)
         fprintf(stderr, "UMAT Error: NTENS != 6. This UMAT requires 3D elements.\n");
@@ -107,20 +106,20 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     double peeq_n = STATEV[0]; // Equivalent plastic strain at start of increment
 
     // Local arrays
-    double stress_trial[6];
-    double Ce_matrix[36]; // Elastic stiffness (6x6 as 1D row-major)
-    double s_dev[6];      // Deviatoric stress tensor (Voigt)
-    double grad_f[6];     // Gradient of yield function df/dsigma (A_vec)
-    double grad_g[6];     // Gradient of plastic potential dg/dsigma (g_vec, flow vector)
-    double Ce_grad_g[6];  // Ce * grad_g
-    double Ce_grad_f[6];  // Ce * grad_f
-    double dEps_p[6];     // Plastic strain increment
-    double dp_dsig[6];
-    double dJ_dsig[6];
-    double dtheta_dsig[6];
+    double stress_trial[VOIGTSIZE_3D];
+    double Ce_matrix[VOIGTSIZE_3D * VOIGTSIZE_3D]; // Elastic stiffness (6x6 as 1D row-major)
+    double s_dev[VOIGTSIZE_3D];      // Deviatoric stress tensor (Voigt)
+    double grad_f[VOIGTSIZE_3D];     // Gradient of yield function df/dsigma (A_vec)
+    double grad_g[VOIGTSIZE_3D];     // Gradient of plastic potential dg/dsigma (g_vec, flow vector)
+    double Ce_grad_g[VOIGTSIZE_3D];  // Ce * grad_g
+    double Ce_grad_f[VOIGTSIZE_3D];  // Ce * grad_f
+    double dEps_p[VOIGTSIZE_3D];     // Plastic strain increment
+    double dp_dsig[VOIGTSIZE_3D];
+    double dJ_dsig[VOIGTSIZE_3D];
+    double dtheta_dsig[VOIGTSIZE_3D];
 
     // --- 1. Calculate Elastic Stiffness Matrix ---
-    calculate_elastic_stiffness(E_mod, nu, Ce_matrix, n_tensor);
+    calculate_elastic_stiffness_matrix_3d(E_mod, nu, Ce_matrix);
 
     // Initialize Jacobian DDSDDE to elastic matrix (default assumption)
     for (i = 0; i < n_tensor * n_tensor; ++i) {
@@ -221,39 +220,4 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 
     *SCD = 0.0; // No creep
     return;
-}
-
-void calculate_elastic_stiffness(double E, double nu, double* DDSDDE, int NTENS)
-{
-    if (NTENS != 6) return; // Only for 3D
-
-    double G      = E / (2.0 * (1.0 + nu));                   // Shear modulus
-    double lambda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu)); // Lame's first param
-
-    double factor = lambda + 2.0 * G;
-
-    // Initialize to zero
-    for (int i = 0; i < NTENS * NTENS; ++i) {
-        DDSDDE[i] = 0.0;
-    }
-
-    // Populate using row-major indexing: DDSDDE[row * NTENS + col]
-    // Normal Stresses
-    DDSDDE[0 * NTENS + 0] = factor; // C_1111 (row 0, col 0)
-    DDSDDE[0 * NTENS + 1] = lambda; // C_1122 (row 0, col 1)
-    DDSDDE[0 * NTENS + 2] = lambda; // C_1133 (row 0, col 2)
-
-    DDSDDE[1 * NTENS + 0] = lambda; // C_2211 (row 1, col 0)
-    DDSDDE[1 * NTENS + 1] = factor; // C_2222 (row 1, col 1)
-    DDSDDE[1 * NTENS + 2] = lambda; // C_2233 (row 1, col 2)
-
-    DDSDDE[2 * NTENS + 0] = lambda; // C_3311 (row 2, col 0)
-    DDSDDE[2 * NTENS + 1] = lambda; // C_3322 (row 2, col 1)
-    DDSDDE[2 * NTENS + 2] = factor; // C_3333 (row 2, col 2)
-
-    // Shear Stresses (using engineering shear strain convention gamma = 2*epsilon_shear)
-    // The stiffness term C_ij = G for i != j in engineering strain notation
-    DDSDDE[3 * NTENS + 3] = G; // C_1212 (row 3, col 3)
-    DDSDDE[4 * NTENS + 4] = G; // C_2323 (row 4, col 4)
-    DDSDDE[5 * NTENS + 5] = G; // C_1313 (row 5, col 5)
 }
