@@ -1,12 +1,10 @@
-#include <stdio.h>
 #include <math.h>
+#include <stdio.h>
 
+#include "../globals.h"
+#include "../stress_utils.h"
 #include "../utils.h"
 #include "../yield_surfaces/matsuoka_nakai_surface.h"
-#include "../stress_utils.h"
-#include "../globals.h"
-
-//#include <stdlib.h> // For exit() if needed, though usually avoided in UMAT
 
 // Define necessary calling conventions and export macros (adjust for your compiler/system)
 // For MSVC on Windows:
@@ -19,62 +17,60 @@
 #define UMAT_CALLCONV
 #endif
 
-
 void calculate_elastic_stiffness(double E, double nu, double* DDSDDE, int NTENS);
 
-
 // Define the UMAT function signature expected by the FEA software.
-//       Check your specific FEA software documentation for exact C interface requirements if available.
-//       Some systems might require all arguments to be pointers, even scalars.
+//       Check your specific FEA software documentation for exact C interface requirements if
+//       available. Some systems might require all arguments to be pointers, even scalars.
 
 UMAT_EXPORT void UMAT_CALLCONV umat(
     // Outputs (to be updated by the subroutine)
-    double* STRESS,      // Stress tensor at end of increment (NTENS components)
-    double* STATEV,      // State variables at end of increment (NSTATV components)
-    double* DDSDDE,      // Jacobian matrix (NTENS * NTENS components)
-    double* SSE,         // Elastic strain energy density
-    double* SPD,         // Plastic dissipation
-    double* SCD,         // Creep dissipation
-    double* RPL,         // Volumetric heat generation
-    double* DDSDDT,      // Stress rate dependency on temperature (NTENS components)
-    double* DRPLDE,      // Derivative of RPL wrt strain (NTENS components)
-    double* DRPLDT,      // Derivative of RPL wrt temperature
+    double* STRESS, // Stress tensor at end of increment (NTENS components)
+    double* STATEV, // State variables at end of increment (NSTATV components)
+    double* DDSDDE, // Jacobian matrix (NTENS * NTENS components)
+    double* SSE,    // Elastic strain energy density
+    double* SPD,    // Plastic dissipation
+    double* SCD,    // Creep dissipation
+    double* RPL,    // Volumetric heat generation
+    double* DDSDDT, // Stress rate dependency on temperature (NTENS components)
+    double* DRPLDE, // Derivative of RPL wrt strain (NTENS components)
+    double* DRPLDT, // Derivative of RPL wrt temperature
     // Inputs (provided by the FEA software)
-    double* STRAN,       // Total strain at start of increment (NTENS components)
-    double* DSTRAN,      // Increment in total strain (NTENS components)
-    double* TIME,        // Step time [0] and total time [1]
-    double* DTIME,       // Time increment
-    double* TEMP,        // Temperature at start of increment
-    double* DTEMP,       // Increment in temperature
-    double* PREDEF,      // Predefined field variables at start (NPREDFIELD components)
-    double* DPRED,       // Increment in predefined field variables (NPREDFIELD components)
-    char* CMNAME,      // Material name (passed typically as CHARACTER*80 in Fortran)
-    int* NDI,         // Number of direct stress components (e.g., 3 for 3D)
-    int* NSHR,        // Number of shear stress components (e.g., 3 for 3D)
-    int* NTENS,       // Total number of stress components (NDI + NSHR)
-    int* NSTATV,      // Number of state variables
-    double* PROPS,       // User-defined material properties (NPROPS components)
-    int* NPROPS,      // Number of properties
-    double* COORDS,      // Coordinates of the integration point (3 components)
-    double* DROT,        // Rotation increment matrix (3x3 = 9 components)
-    double* PNEWDT,      // Suggested new time increment size (can be modified)
-    double* CELENT,      // Characteristic element length
-    double* DFGRD0,      // Deformation gradient at start (9 components)
-    double* DFGRD1,      // Deformation gradient at end (9 components)
-    int* NOEL,        // Element number
-    int* NPT,         // Integration point number
-    int* LAYER,       // Layer number (for shells/beams)
-    int* KSPT,        // Section point number
-    int* KSTEP,       // Step number
-    int* KINC         // Increment number
+    double* STRAN,  // Total strain at start of increment (NTENS components)
+    double* DSTRAN, // Increment in total strain (NTENS components)
+    double* TIME,   // Step time [0] and total time [1]
+    double* DTIME,  // Time increment
+    double* TEMP,   // Temperature at start of increment
+    double* DTEMP,  // Increment in temperature
+    double* PREDEF, // Predefined field variables at start (NPREDFIELD components)
+    double* DPRED,  // Increment in predefined field variables (NPREDFIELD components)
+    char*   CMNAME, // Material name (passed typically as CHARACTER*80 in Fortran)
+    int*    NDI,    // Number of direct stress components (e.g., 3 for 3D)
+    int*    NSHR,   // Number of shear stress components (e.g., 3 for 3D)
+    int*    NTENS,  // Total number of stress components (NDI + NSHR)
+    int*    NSTATV, // Number of state variables
+    double* PROPS,  // User-defined material properties (NPROPS components)
+    int*    NPROPS, // Number of properties
+    double* COORDS, // Coordinates of the integration point (3 components)
+    double* DROT,   // Rotation increment matrix (3x3 = 9 components)
+    double* PNEWDT, // Suggested new time increment size (can be modified)
+    double* CELENT, // Characteristic element length
+    double* DFGRD0, // Deformation gradient at start (9 components)
+    double* DFGRD1, // Deformation gradient at end (9 components)
+    int*    NOEL,   // Element number
+    int*    NPT,    // Integration point number
+    int*    LAYER,  // Layer number (for shells/beams)
+    int*    KSPT,   // Section point number
+    int*    KSTEP,  // Step number
+    int*    KINC    // Increment number
     // Note: Size of CMNAME requires careful handling between C and Fortran
-) {
-
+)
+{
     // --- 0. Initialization and Material Properties ---
     int i, j;
     int n_dim_dir = *NDI;
     int n_dim_shr = *NSHR;
-    int n_tensor = *NTENS; // Should be 6 for 3D
+    int n_tensor  = *NTENS; // Should be 6 for 3D
 
     // --- 0. Check Inputs ---
     if (*NTENS != 6 || *NDI != 3 || *NSHR != 3) {
@@ -93,13 +89,12 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         return;
     }
 
-
     // --- 1. Material Properties ---
-    double E_mod = PROPS[0];                // Young's Modulus
-    double nu = PROPS[1];               // Poisson's Ratio
-    double c = PROPS[2];                // Cohesion (not used in this example)
-    double phi_deg = PROPS[3];              // Friction angle (not used in this example)
-    double psi_deg = PROPS[4];               // Dilation angle (not used in this example)
+    double E_mod   = PROPS[0]; // Young's Modulus
+    double nu      = PROPS[1]; // Poisson's Ratio
+    double c       = PROPS[2]; // Cohesion (not used in this example)
+    double phi_deg = PROPS[3]; // Friction angle (not used in this example)
+    double psi_deg = PROPS[4]; // Dilation angle (not used in this example)
 
     // Convert angles to radians
     double phi_rad = phi_deg * PI / 180.0;
@@ -111,7 +106,7 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     // State variables
     double peeq_n = STATEV[0]; // Equivalent plastic strain at start of increment
 
-        // Local arrays
+    // Local arrays
     double stress_trial[6];
     double Ce_matrix[36]; // Elastic stiffness (6x6 as 1D row-major)
     double s_dev[6];      // Deviatoric stress tensor (Voigt)
@@ -141,29 +136,28 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 
     // calculate invariants
     double p_trial, J_trial, theta_trial, j2_trial, j3_trial;
-    calculate_stress_invariants_3d(stress_trial,&p_trial, &J_trial, &theta_trial, &j2_trial, &j3_trial, s_dev); // s_dev also calculated here
+    calculate_stress_invariants_3d(stress_trial, &p_trial, &J_trial, &theta_trial, &j2_trial,
+                                   &j3_trial, s_dev); // s_dev also calculated here
 
     // matsuoka nakai constants
-    double alpha =0;
-    double beta =0;
-    double gamma =0;
-    double K =0;
-    double M =0;
+    double alpha = 0;
+    double beta  = 0;
+    double gamma = 0;
+    double K     = 0;
+    double M     = 0;
 
     // yield function
     double f_trial = 0.0;
 
     // Calculate yield function value
     calculate_matsuoka_nakai_constants(phi_rad, c, &alpha, &beta, &gamma, &K, &M);
-    calculate_yield_function(p_trial, theta_trial,J_trial, c, phi_rad,alpha,beta,gamma,K,M, &f_trial);
+    calculate_yield_function(p_trial, theta_trial, J_trial, c, phi_rad, alpha, beta, gamma, K, M, &f_trial);
 
     // yield function greater than zero, calculate plastic correction
-    if (f_trial > ZERO_TOL)
-    {
-
+    if (f_trial > ZERO_TOL) {
         // gradient yield function
-        calculate_stress_invariants_derivatives_3d(J_trial, s_dev, j2_trial, j3_trial,dp_dsig,  dJ_dsig,  dtheta_dsig);
-
+        calculate_stress_invariants_derivatives_3d(J_trial, s_dev, j2_trial, j3_trial, dp_dsig,
+                                                   dJ_dsig, dtheta_dsig);
 
         double mats_nak_constants[5] = {phi_rad, M, alpha, beta, gamma};
 
@@ -171,20 +165,19 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 
         // gradient potential function, g, it is required to recalculate the constants using psi
         calculate_matsuoka_nakai_constants(psi_rad, c, &alpha, &beta, &gamma, &K, &M);
-        double mats_nak_constants_plastic_potential[5] ={psi_rad, M, alpha, beta, gamma};
+        double mats_nak_constants_plastic_potential[5] = {psi_rad, M, alpha, beta, gamma};
 
-        calculate_yield_gradient(theta_trial, J_trial, mats_nak_constants_plastic_potential, dp_dsig, dJ_dsig, dtheta_dsig, grad_g);
-
+        calculate_yield_gradient(theta_trial, J_trial, mats_nak_constants_plastic_potential,
+                                 dp_dsig, dJ_dsig, dtheta_dsig, grad_g);
 
         // Calculate terms needed for delta_gamma and Jacobian
         matrix_vector_multiply(Ce_matrix, grad_g, n_tensor, Ce_grad_g); // Ce * g
         matrix_vector_multiply(Ce_matrix, grad_f, n_tensor, Ce_grad_f); // Ce * f
 
-
         // Calculate denominator for delta_gamma (and Jacobian)
         // Assumes perfect plasticity (Hardening modulus H=0)
         // Denom = A_vec : Ce : g_vec = grad_f . (Ce * grad_g)
-        double denom = vector_dot_product(grad_f, Ce_grad_g, n_tensor);
+        double denom       = vector_dot_product(grad_f, Ce_grad_g, n_tensor);
         double delta_gamma = f_trial / denom;
 
         // --- Update Stress ---
@@ -195,7 +188,7 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 
         // --- Update State Variables (PEEQ) ---
         // dEps_p = delta_gamma * g_vec
-        for(i=0; i<n_tensor; ++i) {
+        for (i = 0; i < n_tensor; ++i) {
             dEps_p[i] = delta_gamma * grad_g[i];
         }
         double dSpd = vector_dot_product(STRESS, dEps_p, n_tensor);
@@ -207,36 +200,34 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
             for (i = 0; i < n_tensor; ++i) {
                 for (j = 0; j < n_tensor; ++j) {
                     // Accessing 1D array DDSDDE with row-major logic
-                    DDSDDE[i * n_tensor + j] = Ce_matrix[i * n_tensor + j] - (Ce_grad_g[i] * Ce_grad_f[j]) / denom ;
+                    DDSDDE[i * n_tensor + j] =
+                        Ce_matrix[i * n_tensor + j] - (Ce_grad_g[i] * Ce_grad_f[j]) / denom;
                 }
             }
         }
-    }
-    else{
-
+    } else {
         // --- Elastic Step ---
         // No yield, treat as elastic
         // STRESS_{n+1} = stress_trial
         // DDSDDE remains Ce_matrix (already set)
         // STATEV[0] remains peeq_n
 
-
         for (i = 0; i < n_tensor; ++i) {
             STRESS[i] = stress_trial[i]; // Use trial stress
         }
         // DDSDDE remains Ce_matrix
         // STATEV[0] remains peeq_n
-        }
+    }
 
-     *SCD = 0.0; // No creep
+    *SCD = 0.0; // No creep
     return;
-
 }
 
-void calculate_elastic_stiffness(double E, double nu, double* DDSDDE, int NTENS) {
+void calculate_elastic_stiffness(double E, double nu, double* DDSDDE, int NTENS)
+{
     if (NTENS != 6) return; // Only for 3D
 
-    double G = E / (2.0 * (1.0 + nu));      // Shear modulus
+    double G      = E / (2.0 * (1.0 + nu));                   // Shear modulus
     double lambda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu)); // Lame's first param
 
     double factor = lambda + 2.0 * G;
@@ -262,7 +253,7 @@ void calculate_elastic_stiffness(double E, double nu, double* DDSDDE, int NTENS)
 
     // Shear Stresses (using engineering shear strain convention gamma = 2*epsilon_shear)
     // The stiffness term C_ij = G for i != j in engineering strain notation
-    DDSDDE[3 * NTENS + 3] = G;      // C_1212 (row 3, col 3)
-    DDSDDE[4 * NTENS + 4] = G;      // C_2323 (row 4, col 4)
-    DDSDDE[5 * NTENS + 5] = G;      // C_1313 (row 5, col 5)
+    DDSDDE[3 * NTENS + 3] = G; // C_1212 (row 3, col 3)
+    DDSDDE[4 * NTENS + 4] = G; // C_2323 (row 4, col 4)
+    DDSDDE[5 * NTENS + 5] = G; // C_1313 (row 5, col 5)
 }
