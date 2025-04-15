@@ -28,7 +28,7 @@ void calculate_stress_invariants_3d(const double stress[VOIGTSIZE_3D], double* p
     *J = sqrt((*j2));
 
     // Third invariant of deviatoric stress J3 = det(s)
-    calculate_determinant_voigt_vector_3d(s_dev, j3);
+    *j3 = calculate_determinant_voigt_vector_3d(s_dev);
 
     // Lode angle theta
     if (*J > ZERO_TOL)
