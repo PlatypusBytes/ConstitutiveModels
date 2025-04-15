@@ -1,6 +1,7 @@
 REM this script should be used in: Native Tools Command Prompt for VS 2022
 REM for x64 architecture, use x64 Native Tools Command Prompt for VS 2022
 
+@rem locally this script can also be used in another command prompt when setting up the environment
 @REM call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
 
 @rem debug:

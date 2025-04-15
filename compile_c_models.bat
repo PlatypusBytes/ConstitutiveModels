@@ -5,3 +5,7 @@ REM This script compiles all the models in the c_models directory,
 cd c_models/linear_elastic_with_vertical_tens_cutoff
 call compile.bat
 cd ../..
+
+cd c_models/matsuoka_nakai
+call compile.bat
+cd ../..
