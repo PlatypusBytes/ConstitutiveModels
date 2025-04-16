@@ -16,7 +16,7 @@ def test_strain_controlled_compression_triaxial():
     nu = 0.33
     E = 2 * G * (1 + nu)
 
-    params = {'E': E, 'poison_ratio': nu, 'tensile_cutoff': 1}
+    params = {'E': E, 'poison_ratio': nu, 'tensile_cutoff': 1, "normal_axis_index": 1}
     state_vars={'is_plastic': 0}
 
     # Define the original stress vector
@@ -72,7 +72,7 @@ def test_strain_controlled_tension_triaxial():
     E = 2 * G * (1 + nu)
 
     tensile_cutoff = 0.5
-    params = {'E': E, 'poison_ratio': nu, 'tensile_cutoff': tensile_cutoff}
+    params = {'E': E, 'poison_ratio': nu, 'tensile_cutoff': tensile_cutoff, "normal_axis_index": 1}
     state_vars={'is_plastic': 0}
 
     # Define the original stress vector

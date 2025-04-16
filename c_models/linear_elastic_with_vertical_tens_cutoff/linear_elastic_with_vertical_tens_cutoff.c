@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 
 #include "../elastic_laws/hookes_law.h"
 #include "../globals.h"
@@ -72,9 +73,9 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         // exit(1); // Avoid exiting in production code if possible
         return;  // Or try to handle gracefully
     }
-    if (*NPROPS < 3)
+    if (*NPROPS < 4)
     {
-        fprintf(stderr, "UMAT Error: NPROPS < 3. Requires E, nu, tension_threshold.\n");
+        fprintf(stderr, "UMAT Error: NPROPS < 3. Requires E, nu, tension_threshold and normal_axis_index\n");
         return;
     }
     if (*NSTATV < 1)
@@ -87,6 +88,7 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     double E = PROPS[0];                  // Young's Modulus
     double nu = PROPS[1];                 // Poisson's Ratio
     double tension_threshold = PROPS[2];  // Tensile strength threshold in Y
+    int normal_axis_index = (int)round(PROPS[3]); // Normal axis for tension cutoff (1 for Y, 2 for Z)
 
     // Calculate Elastic Stiffness Matrix (DDSDDE_elastic) ---
     double DDSDDE_elastic[VOIGTSIZE_3D * VOIGTSIZE_3D];
@@ -102,14 +104,14 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     add_vectors(STRESS, delta_stress, VOIGTSIZE_3D, stress_trial);
 
     // Apply Tension Cutoff Logic ---
-    // Check vertical stress component (sigma_yy, index 1)
-    const double sigma_yy_trial = stress_trial[1];
+    // Check normal stress component
+    const double sigma_normal_trial = stress_trial[normal_axis_index];
 
-    if (sigma_yy_trial > tension_threshold)
+    if (sigma_normal_trial > tension_threshold)
     {
         //  Update Stress, Jacobian, and State Variables ---
         // Tension cutoff is active: set vertical stress to the threshold
-        STRESS[1] = tension_threshold;
+        STRESS[normal_axis_index] = tension_threshold;
 
         // set stiffness matrix terms to a small value for numerical stability
         // DDSDDE = DDSDDE_elastic * small_value
