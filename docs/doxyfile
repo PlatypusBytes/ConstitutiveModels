@@ -1,0 +1,36 @@
+# Project-related settings
+PROJECT_NAME           = "Constitutive Models"
+PROJECT_BRIEF          = "This project contains various constitutive models for finite element analysis. These models are meant to be used in conjunction with the KratosMultiphysics GeoMechanics application."
+OUTPUT_DIRECTORY       = docs
+
+# Input settings
+INPUT                  = ../c_models ../README.md
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.c *.md
+
+# Enable source code documentation
+EXTRACT_ALL            = YES
+
+# Enable Markdown
+MARKDOWN_SUPPORT       = YES
+EXTENSION_MAPPING      = md=markdown
+
+# Enable inline dot/graphviz diagrams
+HAVE_DOT               = YES
+DOT_GRAPH_MAX_NODES    = 100
+CALL_GRAPH             = YES
+CALLER_GRAPH           = YES
+
+# Documentation output format
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+
+# BibTeX / citation support
+USE_BIBTEX             = YES
+BIBFILES               = refs.bib
+
+# Documentation styling
+FULL_PATH_NAMES        = NO
+INLINE_SOURCES         = YES
+SOURCE_BROWSER         = YES
+GENERATE_TREEVIEW      = YES

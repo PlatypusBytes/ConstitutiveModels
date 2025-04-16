@@ -3,6 +3,15 @@
 #define MATSUOKA_NAKAI_SURFACE_H
 
 /**
+ * @file matsuoka_nakai_surface.h
+ * @brief Header file for Matsuoka-Nakai yield surface calculations.
+ *
+ * This file contains function declarations for calculating the Matsuoka-Nakai yield function,
+ * its gradient, and the constants used in the calculations. The implementation follows the formulation
+ * defined in \cite Lagioia_2016.
+ */
+
+/**
  * @brief Function to calculate the Matsuoka-Nakai yield function.
  *
  * @param p Mean stress (pressure).
