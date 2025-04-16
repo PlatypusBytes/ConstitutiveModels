@@ -1,5 +1,9 @@
 #include <stdio.h>
 
+#include "../elastic_laws/hookes_law.h"
+#include "../globals.h"
+#include "../utils.h"
+
 // Define necessary calling conventions and export macros (adjust for your compiler/system)
 // For MSVC on Windows:
 #if defined(_WIN32) || defined(_WIN64)
@@ -59,7 +63,7 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 )
 {
     // --- 0. Check Inputs ---
-    if (*NTENS != 6 || *NDI != 3 || *NSHR != 3)
+    if (*NTENS != VOIGTSIZE_3D || *NDI != 3 || *NSHR != 3)
     {
         // Handle error - This UMAT is specifically for 3D
         // For simplicity, we'll print an error and potentially stop (though stopping is usually
@@ -79,112 +83,51 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         return;
     }
 
-    // --- 1. Material Properties ---
+    // Material Properties ---
     double E = PROPS[0];                  // Young's Modulus
     double nu = PROPS[1];                 // Poisson's Ratio
     double tension_threshold = PROPS[2];  // Tensile strength threshold in Y
 
-    // --- 2. Calculate Elastic Constants ---
-    double lambda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu));  // Lame's first parameter
-    double G = E / (2.0 * (1.0 + nu));  // Shear modulus (Lame's second parameter)
+    // Calculate Elastic Stiffness Matrix (DDSDDE_elastic) ---
+    double DDSDDE_elastic[VOIGTSIZE_3D * VOIGTSIZE_3D];
+    calculate_elastic_stiffness_matrix_3d(E, nu, DDSDDE_elastic);
 
-// --- 3. Calculate Elastic Stiffness Matrix (DDSDDE_elastic) ---
-// Stored as a 1D array (NTENS * NTENS). Assuming row-major storage like.
-// C = | C11 C12 C13  0   0   0  |   Indices (0-based C array):
-//     | C12 C22 C23  0   0   0  |   col 0: 0, 1, 2, 3, 4, 5
-//     | C13 C23 C33  0   0   0  |   col 1: 6, 7, 8, 9, 10, 11
-//     |  0   0   0  C44  0   0  |   col 2: 12, 13, 14, 15, 16, 17
-//     |  0   0   0   0  C55  0  |   ... etc ...
-//     |  0   0   0   0   0  C66 |
-// C11 = C22 = C33 = lambda + 2G
-// C12 = C13 = C23 = lambda
-// C44 = C55 = C66 = G
+    // Calculate Elastic Trial Stress ---
+    // delta_stress = D * DSTRAN
+    double delta_stress[VOIGTSIZE_3D];
+    matrix_vector_multiply(DDSDDE_elastic, DSTRAN, VOIGTSIZE_3D, delta_stress);
 
-// define compilation time constants
-#define n_tens 6
-#define total_size 36  // Total size of the stiffness matrix, 6 * 6 = 36
+    // stress_trial = STRESS + delta_stress
+    double stress_trial[VOIGTSIZE_3D];
+    add_vectors(STRESS, delta_stress, VOIGTSIZE_3D, stress_trial);
 
-    double DDSDDE_elastic[total_size];                             // NTENS * NTENS = 6 * 6 = 36
-    for (int i = 0; i < total_size; ++i) DDSDDE_elastic[i] = 0.0;  // Initialize
-
-    double C11 = lambda + 2.0 * G;
-    double C12 = lambda;
-    double C44 = G;
-
-    // Diagonal terms
-    DDSDDE_elastic[0] = C11;   // C(0,0) index 0
-    DDSDDE_elastic[7] = C11;   // C(1,1) index 7 = 1*6 + 1
-    DDSDDE_elastic[14] = C11;  // C(2,2) index 14 = 2*6 + 2
-    DDSDDE_elastic[21] = C44;  // C(3,3) index 21 = 3*6 + 3
-    DDSDDE_elastic[28] = C44;  // C(4,4) index 28 = 4*6 + 4
-    DDSDDE_elastic[35] = C44;  // C(5,5) index 35 = 5*6 + 5
-
-    // Off-diagonal terms (symmetric)
-    DDSDDE_elastic[1] = C12;  // C(0,1) index 1 = 0*6 + 1
-    DDSDDE_elastic[6] = C12;  // C(1,0) index 6 = 1*6 + 0
-
-    DDSDDE_elastic[2] = C12;   // C(0,2) index 2 = 0*6 + 2
-    DDSDDE_elastic[12] = C12;  // C(2,0) index 12 = 2*6 + 0
-
-    DDSDDE_elastic[8] = C12;   // C(1,2) index 8 = 1*6 + 2
-    DDSDDE_elastic[13] = C12;  // C(2,1) index 13 = 2*6 + 1
-
-    // --- 5. Calculate Elastic Trial Stress ---
-    double delta_stress[n_tens];
-    for (int i = 0; i < n_tens; ++i)
-    {
-        delta_stress[i] = 0.0;
-        double* row_ptr = &DDSDDE_elastic[i * n_tens];  // Pointer to the start of the row
-        for (int j = 0; j < n_tens; ++j)
-        {
-            delta_stress[i] +=
-                row_ptr[j] * DSTRAN[j];  // Row-major access (better for C), equivalent to:
-            // stress_trial[i] += DDSDDE_elastic[i* ntens + j] * DSTRAN[j];
-        }
-    }
-    double stress_trial[n_tens];
-    for (int i = 0; i < n_tens; ++i)
-    {
-        stress_trial[i] = STRESS[i] + delta_stress[i];
-    }
-
-    // --- 6. Apply Tension Cutoff Logic ---
+    // Apply Tension Cutoff Logic ---
     // Check vertical stress component (sigma_yy, index 1)
-    double sigma_yy_trial = stress_trial[1];
-    int tension_cutoff_active = 0;  // Flag: 0 = elastic, 1 = cutoff
+    const double sigma_yy_trial = stress_trial[1];
 
     if (sigma_yy_trial > tension_threshold)
     {
-        tension_cutoff_active = 1;
-    }
-
-    // --- 7. Update Stress, Jacobian, and State Variables ---
-    if (tension_cutoff_active)
-    {
-        // Tension cutoff is active: Zero out all stresses and the Jacobian
-
+        //  Update Stress, Jacobian, and State Variables ---
+        // Tension cutoff is active: set vertical stress to the threshold
         STRESS[1] = tension_threshold;
 
-        // set diagonal terms to a small value for numerical stability
-        double small_value = 1.0e-16;  // Small value for numerical stability
+        // set stiffness matrix terms to a small value for numerical stability
+        // DDSDDE = DDSDDE_elastic * small_value
+        double small_value = 1.0e-16;
+        vector_scalar_multiply(DDSDDE_elastic, small_value, VOIGTSIZE_3D * VOIGTSIZE_3D, DDSDDE);
 
-        for (int i = 0; i < total_size; ++i)
-        {
-            DDSDDE[i] = DDSDDE_elastic[i] * small_value;
-        }
         STATEV[0] = 1.0;  // Indicate cutoff state
     }
     else
     {
         // Elastic behavior: Use the trial stress and elastic Jacobian
-        for (int i = 0; i < n_tens; ++i)
-        {
-            STRESS[i] = stress_trial[i];
-        }
-        for (int i = 0; i < total_size; ++i)
-        {
-            DDSDDE[i] = DDSDDE_elastic[i];
-        }
+
+        // Copy the trial stress to the output stress
+        copy_array(stress_trial, VOIGTSIZE_3D, STRESS);
+
+        // Copy the elastic stiffness matrix to the output Jacobian
+        copy_array(DDSDDE_elastic, VOIGTSIZE_3D * VOIGTSIZE_3D, DDSDDE);
+
         STATEV[0] = 0.0;  // Indicate elastic state
     }
 

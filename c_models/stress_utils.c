@@ -43,7 +43,7 @@ void calculate_stress_invariants_3d(const double stress[VOIGTSIZE_3D], double* p
     }
     else
     {
-        *theta = 0.0;  // Set to convention if q is zero
+        *theta = 0.0;  // Set to convention if J is zero
     }
     // Ensure theta is within [-pi/6, pi/6] range
     if (*theta < -(PI / 6.0) + ZERO_TOL)

@@ -118,7 +118,7 @@ class IncrDriver:
                                                   self.constitutive_model_info["properties"], 0)
 
         else:
-            ValueError(f"Language {language} not supported. Only 'c' is supported.")
+            ValueError(f"Language {language} not supported. Only 'c' and 'fortran' are supported.")
 
         # initialize stress and strain vectors
         strain_vector = np.zeros(self.voight_size)
@@ -129,9 +129,6 @@ class IncrDriver:
 
         # loop over time steps
         for t in range(self.n_time_steps):
-
-            if t ==3:
-                a=1+1
 
             delta_strain = np.copy(self.strain_increment)
             correction_delta_strain = np.zeros(self.voight_size)
@@ -176,7 +173,7 @@ class IncrDriver:
                                                                               self.constitutive_model_info[
                                                                                   "properties"], t)
                 else:
-                    ValueError(f"Language {language} not supported. Only 'c' is supported.")
+                    ValueError(f"Language {language} not supported. Only 'c' and 'fortran' are supported.")
 
 
                 # if not at max iterations, update the approximation for delta stress and reset stress vector and state
