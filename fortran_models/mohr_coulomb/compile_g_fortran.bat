@@ -1,0 +1,1 @@
+gfortran -shared -o mohr_coulomb.dll UMAT_MohrCoulomb.f
