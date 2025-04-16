@@ -49,12 +49,12 @@ jobs:
     - name: Upload c DLLs as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: compiled-dlls
+        name: compiled_c_dlls
         path: .\c_models\**\*.dll
 
     - name: Upload fortran DLLs as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: compiled-dlls
+        name: compiled_fortran_dlls
         path: .\fortran_models\**\*.dll
 
