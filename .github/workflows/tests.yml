@@ -46,9 +46,15 @@ jobs:
     - name: Test with pytest
       run: pytest tests
 
-    - name: Upload DLLs as artifact
+    - name: Upload c DLLs as artifact
       uses: actions/upload-artifact@v4
       with:
         name: compiled-dlls
-        path: .\c_models\matsuoka_nakai\matsuoka_nakai.dll
+        path: .\c_models\**\*.dll
+
+    - name: Upload fortran DLLs as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: compiled-dlls
+        path: .\fortran_models\**\*.dll
 
