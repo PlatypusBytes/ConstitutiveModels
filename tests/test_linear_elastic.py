@@ -24,7 +24,7 @@ def test_strain_controlled_compression_triaxial():
     project_dir = os.getcwd()
     # check operating system
     if sys.platform == 'win32':
-        model_loc = f"{project_dir}\fortran_models\linear_elastic\linear_elastic.dll"
+        model_loc = rf"{project_dir}\fortran_models\linear_elastic\linear_elastic.dll"
     elif sys.platform == 'linux':
         model_loc = f"{project_dir}/build_Fortran/lib/linear_elastic.so"
     else:
@@ -83,7 +83,7 @@ def test_strain_controlled_tension_triaxial():
     project_dir = os.getcwd()
     # check operating system
     if sys.platform == 'win32':
-        model_loc = f"{project_dir}\fortran_models\linear_elastic\linear_elastic.dll"
+        model_loc = rf"{project_dir}\fortran_models\linear_elastic\linear_elastic.dll"
     elif sys.platform == 'linux':
         model_loc = f"{project_dir}/build_Fortran/lib/linear_elastic.so"
     else:
