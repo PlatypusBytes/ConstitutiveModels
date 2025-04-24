@@ -8,7 +8,7 @@ REM for x64 architecture, use x64 Native Tools Command Prompt for VS 2022
 @REM cl /c /EHsc /W3 /Zi /MD matsuoka_nakai.c ../utils.c ../stress_utils.c ../globals.c ../yield_surfaces/matsuoka_nakai_surface.c ../elastic_laws/hookes_law.c
 
 @rem release:
-cl /c /EHsc /W3 matsuoka_nakai.c ../utils.c ../stress_utils.c ../globals.c ../yield_surfaces/matsuoka_nakai_surface.c ../elastic_laws/hookes_law.c
+cl /c /EHsc /W4 /O2 matsuoka_nakai.c ../utils.c ../stress_utils.c ../globals.c ../yield_surfaces/matsuoka_nakai_surface.c ../elastic_laws/hookes_law.c
 
 @rem link the dll
 link /DLL /OUT:matsuoka_nakai.dll matsuoka_nakai.obj utils.obj stress_utils.obj globals.obj matsuoka_nakai_surface.obj hookes_law.obj  /DEF:umat.def

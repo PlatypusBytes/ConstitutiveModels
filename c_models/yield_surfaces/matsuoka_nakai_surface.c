@@ -5,9 +5,9 @@
 #include "../globals.h"
 #include "matsuoka_nakai_surface.h"
 
-void calculate_yield_function(const double p, const double theta, const double J, const double c,
-                              const double phi_rad, const double alpha, const double beta,
-                              const double gamma, const double K, const double M, double* f)
+void calculate_yield_function(const double p, const double theta, const double J,
+                              const double alpha, const double beta, const double gamma,
+                              const double K, const double M, double* f)
 {
     *f = M * (-K + p) + J * alpha * cos(acos(beta * sin(3.0 * theta)) / 3.0 - gamma * PI / 6.0);
 
@@ -21,11 +21,10 @@ void calculate_yield_gradient(const double theta, const double J, const double* 
                               const double dtheta_dsig[VOIGTSIZE_3D],
                               double grad[VOIGTSIZE_3D])  // Output gradient vector
 {
-    const double angle_rad = constants[0];  // Angle in radians
-    const double M = constants[1];          // Matsuoka-Nakai constant
-    const double alpha = constants[2];      // Matsuoka-Nakai constant
-    const double beta = constants[3];       // Matsuoka-Nakai constant
-    const double gamma = constants[4];      // Matsuoka-Nakai constant
+    const double M = constants[1];      // Matsuoka-Nakai constant
+    const double alpha = constants[2];  // Matsuoka-Nakai constant
+    const double beta = constants[3];   // Matsuoka-Nakai constant
+    const double gamma = constants[4];  // Matsuoka-Nakai constant
 
     // Computes df/dsigma or dg/dsigma based on the angle provided
     // Uses chain rule: grad = (dF/dp)*(dp/dsig) + (dF/dq)*(dq/dsig) + (dF/dtheta)*(dtheta/dsig)
@@ -35,8 +34,6 @@ void calculate_yield_gradient(const double theta, const double J, const double* 
     for (int i = 0; i < VOIGTSIZE_3D; ++i) grad[i] = 0.0;
 
     // --- Components for Chain Rule ---
-    const double sin_angle = sin(angle_rad);
-    const double cos_angle = cos(angle_rad);  // Needed if using the c*cos(angle) form
 
     // 1. Derivatives of F (yield/potential function) w.r.t. invariants
 

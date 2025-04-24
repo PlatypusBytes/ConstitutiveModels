@@ -7,8 +7,8 @@
  * @brief Header file for Matsuoka-Nakai yield surface calculations.
  *
  * This file contains function declarations for calculating the Matsuoka-Nakai yield function,
- * its gradient, and the constants used in the calculations. The implementation follows the formulation
- * defined in \cite Lagioia_2016.
+ * its gradient, and the constants used in the calculations. The implementation follows the
+ * formulation defined in \cite Lagioia_2016.
  */
 
 /**
@@ -17,8 +17,6 @@
  * @param p Mean stress (pressure).
  * @param theta Lode angle.
  * @param J Square root of the second deviatoric invariant of the stress tensor.
- * @param c Cohesion.
- * @param phi_rad Angle in radians.
  * @param alpha Matsuoka-Nakai constant.
  * @param beta Matsuoka-Nakai constant.
  * @param gamma Matsuoka-Nakai constant.
@@ -26,9 +24,9 @@
  * @param M Matsuoka-Nakai constant, related to the angle.
  * @param f Pointer to the output yield function value.
  */
-void calculate_yield_function(const double p, const double theta, const double J, const double c,
-                              const double phi_rad, const double alpha, const double beta,
-                              const double gamma, const double K, const double M, double* f);
+void calculate_yield_function(const double p, const double theta, const double J,
+                              const double alpha, const double beta, const double gamma,
+                              const double K, const double M, double* f);
 
 /**
  * @brief Function to calculate the gradient of the Matsuoka-Nakai yield function.

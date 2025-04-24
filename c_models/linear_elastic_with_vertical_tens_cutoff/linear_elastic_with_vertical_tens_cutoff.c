@@ -1,5 +1,5 @@
-#include <stdio.h>
 #include <math.h>
+#include <stdio.h>
 
 #include "../elastic_laws/hookes_law.h"
 #include "../globals.h"
@@ -63,6 +63,35 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     // Note: Size of CMNAME requires careful handling between C and Fortran
 )
 {
+    // avoid unused variable warnings
+    (void)KINC;
+    (void)KSTEP;
+    (void)KSPT;
+    (void)LAYER;
+    (void)NPT;
+    (void)NOEL;
+    (void)DFGRD0;
+    (void)DFGRD1;
+    (void)CELENT;
+    (void)PNEWDT;
+    (void)DROT;
+    (void)COORDS;
+    (void)CMNAME;
+    (void)DPRED;
+    (void)PREDEF;
+    (void)DTEMP;
+    (void)TEMP;
+    (void)DTIME;
+    (void)TIME;
+    (void)STRAN;
+    (void)DRPLDT;
+    (void)DRPLDE;
+    (void)DDSDDT;
+    (void)RPL;
+    (void)SSE;
+    (void)SCD;
+    (void)SPD;
+
     // --- 0. Check Inputs ---
     if (*NTENS != VOIGTSIZE_3D || *NDI != 3 || *NSHR != 3)
     {
@@ -75,7 +104,9 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     }
     if (*NPROPS < 4)
     {
-        fprintf(stderr, "UMAT Error: NPROPS < 3. Requires E, nu, tension_threshold and normal_axis_index\n");
+        fprintf(
+            stderr,
+            "UMAT Error: NPROPS < 3. Requires E, nu, tension_threshold and normal_axis_index\n");
         return;
     }
     if (*NSTATV < 1)
@@ -88,7 +119,8 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     double E = PROPS[0];                  // Young's Modulus
     double nu = PROPS[1];                 // Poisson's Ratio
     double tension_threshold = PROPS[2];  // Tensile strength threshold in Y
-    int normal_axis_index = (int)round(PROPS[3]); // Normal axis for tension cutoff (1 for Y, 2 for Z)
+    int normal_axis_index =
+        (int)round(PROPS[3]);  // Normal axis for tension cutoff (1 for Y, 2 for Z)
 
     // Calculate Elastic Stiffness Matrix (DDSDDE_elastic) ---
     double DDSDDE_elastic[VOIGTSIZE_3D * VOIGTSIZE_3D];

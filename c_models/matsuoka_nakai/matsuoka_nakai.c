@@ -65,10 +65,35 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     // Note: Size of CMNAME requires careful handling between C and Fortran
 )
 {
+    // avoid unused variable warnings
+    (void)KINC;
+    (void)KSTEP;
+    (void)KSPT;
+    (void)LAYER;
+    (void)NPT;
+    (void)NOEL;
+    (void)DFGRD0;
+    (void)DFGRD1;
+    (void)CELENT;
+    (void)PNEWDT;
+    (void)DROT;
+    (void)COORDS;
+    (void)CMNAME;
+    (void)DPRED;
+    (void)PREDEF;
+    (void)DTEMP;
+    (void)TEMP;
+    (void)DTIME;
+    (void)TIME;
+    (void)STRAN;
+    (void)DRPLDT;
+    (void)DRPLDE;
+    (void)DDSDDT;
+    (void)RPL;
+    (void)SSE;
+
     // --- 0. Initialization and Material Properties ---
     int i;
-    int n_dim_dir = *NDI;
-    int n_dim_shr = *NSHR;
 
     // --- 0. Check Inputs ---
     if (*NTENS != VOIGTSIZE_3D || *NDI != 3 || *NSHR != 3)
@@ -101,9 +126,6 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     // Convert angles to radians
     double phi_rad = phi_deg * PI / 180.0;
     double psi_rad = psi_deg * PI / 180.0;
-    double sin_phi = sin(phi_rad);
-    double cos_phi = cos(phi_rad);
-    double sin_psi = sin(psi_rad);
 
     // Local arrays
     double stress_trial[VOIGTSIZE_3D];
@@ -149,8 +171,7 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 
     // Calculate yield function value
     calculate_matsuoka_nakai_constants(phi_rad, c, &alpha, &beta, &gamma, &K, &M);
-    calculate_yield_function(p_trial, theta_trial, J_trial, c, phi_rad, alpha, beta, gamma, K, M,
-                             &f_trial);
+    calculate_yield_function(p_trial, theta_trial, J_trial, alpha, beta, gamma, K, M, &f_trial);
 
     // yield function greater than zero, calculate plastic correction
     if (f_trial > ZERO_TOL)
@@ -195,7 +216,7 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         *SPD += dSpd;
 
         // Calculate outer product of Ce_grad_g and Ce_grad_f
-        const double Ce_grad_g_outer_Ce_grad_f[VOIGTSIZE_3D * VOIGTSIZE_3D];
+        double Ce_grad_g_outer_Ce_grad_f[VOIGTSIZE_3D * VOIGTSIZE_3D];
         vector_outer_product(Ce_grad_g, Ce_grad_f, VOIGTSIZE_3D, Ce_grad_g_outer_Ce_grad_f);
 
         // --- Calculate Consistent Tangent Modulus (Jacobian DDSDDE) ---
