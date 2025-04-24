@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 
 from tests.incr_driver import IncrDriver
@@ -23,8 +24,16 @@ def test_strain_controlled_compression_triaxial():
     orig_stress_vector = np.array([-1., -1., -1., 0, 0, 0])
 
     project_dir = os.getcwd()
+    # check operating system
+    if sys.platform == 'win32':
+        model_loc = f"{project_dir}\c_models\matsuoka_nakai\matsuoka_nakai.dll"
+    elif sys.platform == 'linux':
+        model_loc = f"{project_dir}/build_C/lib/libmatsuoka_nakai.so"
+    else:
+        raise Exception("Unsupported operating system")
+
     const_model_info = {"language": "c",
-                        "file_name": f"{project_dir}\c_models\matsuoka_nakai\matsuoka_nakai.dll",
+                        "file_name":model_loc,
                         "properties": list(params.values()),
                         "state_vars": list(state_vars.values())}
 
@@ -95,8 +104,16 @@ def test_strain_controlled_tension_triaxial():
     orig_stress_vector = np.array([-1., -1., -1., 0, 0, 0])
 
     project_dir = os.getcwd()
+    # check operating system
+    if sys.platform == 'win32':
+        model_loc = f"{project_dir}\c_models\matsuoka_nakai\matsuoka_nakai.dll"
+    elif sys.platform == 'linux':
+        model_loc = f"{project_dir}/build_C/lib/libmatsuoka_nakai.so"
+    else:
+        raise Exception("Unsupported operating system")
+
     const_model_info = {"language": "c",
-                        "file_name": f"{project_dir}\c_models\matsuoka_nakai\matsuoka_nakai.dll",
+                        "file_name":model_loc,
                         "properties": list(params.values()),
                         "state_vars": list(state_vars.values())}
 
