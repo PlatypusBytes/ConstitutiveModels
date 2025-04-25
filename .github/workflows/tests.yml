@@ -1,5 +1,6 @@
 name: Tests
 
+
 # Controls when the workflow will run
 on:
   pull_request:
@@ -8,6 +9,12 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+env:
+    # Set the default Python version to 3.11
+    PYTHON_VERSION: '3.11'
+    C_LIBRARY_DIR: 'build_C/lib'
+    FORTRAN_ARTIFACTS_DIR: 'artifacts'
+
 jobs:
   test-windows:
     name: Test on Windows
@@ -15,17 +22,16 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
-    - name: Setup VS Developer Command Prompt
-      uses: ilammy/msvc-dev-cmd@v1
+    - uses: msys2/setup-msys2@v2
       with:
-        arch: x64
-
-    - name: Build C DLLs
+        install: gcc make
+    - name: Build with MSYS2
+      shell: msys2 {0}
       run: |
-        call compile_c_models.bat
-      shell: cmd
+         uname -s
+         make
 
     - name: Build fortran DLLs
       run: call compile_fortran_models.bat
@@ -34,7 +40,7 @@ jobs:
     - name: Set up Python 3.11
       uses: actions/setup-python@v2
       with:
-        python-version: '3.11'
+        python-version: $PYTHON_VERSION
 
     - name: Install dependencies
       run: |
@@ -48,7 +54,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: compiled_c_dlls_windows
-        path: .\c_models\**\*.dll
+        path: .\$C_LIBRARY_DIR\*.dll
 
     - name: Upload fortran libraries as artifact
       uses: actions/upload-artifact@v4
@@ -73,10 +79,10 @@ jobs:
         bash compile_fortran_models.sh
       shell: bash
 
-    - name: Set up Python 3.11
+    - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: '3.11'
+        python-version: $PYTHON_VERSION
 
     - name: Install dependencies
       run: |
@@ -90,7 +96,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: compiled_c_libs_linux
-        path: ./build_C/lib/*.so
+        path: ./$C_LIBRARY_DIR/*.so
 
     - name: Upload fortran libraries as artifact
       uses: actions/upload-artifact@v4

@@ -26,9 +26,9 @@ def test_strain_controlled_compression_triaxial():
     project_dir = os.getcwd()
     # check operating system
     if sys.platform == 'win32':
-        model_loc = f"{project_dir}\c_models\matsuoka_nakai\matsuoka_nakai.dll"
+        model_loc = f"{project_dir}/build_C/lib/matsuoka_nakai.dll"
     elif sys.platform == 'linux':
-        model_loc = f"{project_dir}/build_C/lib/libmatsuoka_nakai.so"
+        model_loc = f"{project_dir}/build_C/lib/matsuoka_nakai.dll"
     else:
         raise Exception("Unsupported operating system")
 
@@ -106,9 +106,9 @@ def test_strain_controlled_tension_triaxial():
     project_dir = os.getcwd()
     # check operating system
     if sys.platform == 'win32':
-        model_loc = f"{project_dir}\c_models\matsuoka_nakai\matsuoka_nakai.dll"
+        model_loc = f"{project_dir}/build_C/lib/matsuoka_nakai.dll"
     elif sys.platform == 'linux':
-        model_loc = f"{project_dir}/build_C/lib/libmatsuoka_nakai.so"
+        model_loc = f"{project_dir}/build_C/lib/matsuoka_nakai.so"
     else:
         raise Exception("Unsupported operating system")
 

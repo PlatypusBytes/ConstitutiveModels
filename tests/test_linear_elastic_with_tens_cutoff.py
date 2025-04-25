@@ -26,9 +26,9 @@ def test_strain_controlled_compression_triaxial():
     project_dir = os.getcwd()
     # check operating system
     if sys.platform == 'win32':
-        model_loc = rf"{project_dir}\c_models\linear_elastic_with_vertical_tens_cutoff\linear_elastic_with_vertical_tens_cutoff.dll"
+        model_loc = rf"{project_dir}/build_C/lib/linear_elastic_with_vertical_tens_cutoff.dll"
     elif sys.platform == 'linux':
-        model_loc = f"{project_dir}/build_C/lib/liblinear_elastic_with_vertical_tens_cutoff.so"
+        model_loc = f"{project_dir}/build_C/lib/linear_elastic_with_vertical_tens_cutoff.so"
     else:
         raise Exception("Unsupported operating system")
 
@@ -90,7 +90,7 @@ def test_strain_controlled_tension_triaxial():
     project_dir = os.getcwd()
     # check operating system
     if sys.platform == 'win32':
-        model_loc = rf"{project_dir}\c_models\linear_elastic_with_vertical_tens_cutoff\linear_elastic_with_vertical_tens_cutoff.dll"
+        model_loc = rf"{project_dir}/build_C/lib/linear_elastic_with_vertical_tens_cutoff.dll"
     elif sys.platform == 'linux':
         model_loc = f"{project_dir}/build_C/lib/liblinear_elastic_with_vertical_tens_cutoff.so"
     else:
