@@ -40,7 +40,7 @@ jobs:
     - name: Set up Python 3.11
       uses: actions/setup-python@v2
       with:
-        python-version: $PYTHON_VERSION
+        python-version: ${{ env.PYTHON_VERSION }}
 
     - name: Install dependencies
       run: |
@@ -54,7 +54,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: compiled_c_dlls_windows
-        path: .\$C_LIBRARY_DIR\*.dll
+        path: .\${{ env.C_LIBRARY_DIR }}\*.dll
 
     - name: Upload fortran libraries as artifact
       uses: actions/upload-artifact@v4
@@ -82,7 +82,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: $PYTHON_VERSION
+        python-version: ${{ env.PYTHON_VERSION }}
 
     - name: Install dependencies
       run: |
@@ -96,7 +96,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: compiled_c_libs_linux
-        path: ./$C_LIBRARY_DIR/*.so
+        path: ./${{ env.C_LIBRARY_DIR }}/*.so
 
     - name: Upload fortran libraries as artifact
       uses: actions/upload-artifact@v4
