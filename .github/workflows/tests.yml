@@ -29,7 +29,6 @@ jobs:
       with:
         install: gcc make
     - name: Build with MSYS2
-      uses: msys2/setup-msys2@v2
       shell: msys2 {0}
       run: |
          uname -s
