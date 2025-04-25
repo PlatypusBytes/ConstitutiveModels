@@ -2,6 +2,8 @@
 #ifndef MATSUOKA_NAKAI_SURFACE_H
 #define MATSUOKA_NAKAI_SURFACE_H
 
+#include "../globals.h"
+
 /**
  * @file matsuoka_nakai_surface.h
  * @brief Header file for Matsuoka-Nakai yield surface calculations.
@@ -40,8 +42,8 @@ void calculate_yield_function(const double p, const double theta, const double J
  * @param grad Pointer to the output gradient vector.
  */
 void calculate_yield_gradient(const double theta, const double J, const double* constants,
-                              const double* dp_dsig, const double* dJ_dsig,
-                              const double* dtheta_dsig, double* grad);
+                              const double dp_dsig[VOIGTSIZE_3D], const double dJ_dsig[VOIGTSIZE_3D],
+                              const double dtheta_dsig[VOIGTSIZE_3D], double grad[VOIGTSIZE_3D]);
 
 /**
  * @brief Function to calculate the Matsuoka-Nakai constants.
