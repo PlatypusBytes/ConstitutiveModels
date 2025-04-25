@@ -24,10 +24,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - uses: msys2/setup-msys2@v2
+    - name: install gcc and make
+      uses: msys2/setup-msys2@v2
       with:
         install: gcc make
     - name: Build with MSYS2
+      uses: msys2/setup-msys2@v2
       shell: msys2 {0}
       run: |
          uname -s
