@@ -11,7 +11,7 @@
 // For MSVC on Windows:
 #if defined(_WIN32) || defined(_WIN64)
 #define UMAT_EXPORT __declspec(dllexport)
-#define UMAT_CALLCONV   // Abaqus often uses stdcall
+#define UMAT_CALLCONV __stdcall  // Abaqus often uses stdcall
 #else
 // For GCC/Clang on Linux/macOS (usually no special decoration needed)
 #define UMAT_EXPORT

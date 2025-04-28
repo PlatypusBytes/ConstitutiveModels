@@ -13,7 +13,7 @@ endif
 
 CC = gcc
 CFLAGS = -fPIC -Wall -Wextra -O2 -g
-LDFLAGS = -static-libgcc -shared
+LDFLAGS = -static-libgcc -static-libstdc++ -shared
 
 # Output directories
 BUILD_DIR = build_C
