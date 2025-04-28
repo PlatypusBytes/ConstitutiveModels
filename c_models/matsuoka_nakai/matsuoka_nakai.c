@@ -160,11 +160,11 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
                                    &j3_trial, s_dev);  // s_dev also calculated here
 
     // matsuoka nakai constants
-    double alpha = 0;
-    double beta = 0;
-    double gamma = 0;
-    double K = 0;
-    double M = 0;
+    double alpha = 0.0;
+    double beta = 0.0;
+    double gamma = 0.0;
+    double K = 0.0;
+    double M = 0.0;
 
     // yield function
     double f_trial = 0.0;

@@ -41,7 +41,7 @@ void calculate_yield_gradient(const double theta, const double J, const double* 
     const double C1 = alpha * cos(acos(beta * sin(3.0 * theta)) / 3.0 - gamma * PI / 6.0);
     const double dF_dJ = C1;
 
-    const double dC1_dtheta = alpha * beta * cos(3 * theta) *
+    const double dC1_dtheta = alpha * beta * cos(3.0 * theta) *
                               sin(acos(beta * sin(3.0 * theta)) / 3.0 - gamma * PI / 6.0) /
                               sqrt(1.0 - beta * beta * pow(sin(3.0 * theta), 2.0));
     const double dF_dtheta = J * dC1_dtheta;
@@ -59,11 +59,11 @@ void calculate_matsuoka_nakai_constants(const double angle_rad, const double c, 
     // if angle_rad is zero, return tresca constants
     if (angle_rad < ZERO_TOL)
     {
-        *M = 0;
-        *K = 0;
-        *alpha = 1 / (cos(PI / 6));
+        *M = 0.0;
+        *K = 0.0;
+        *alpha = 1.0 / (cos(PI / 6.0));
         *beta = 0.9999;
-        *gamma = 1;
+        *gamma = 1.0;
     }
     // else Matsuaoka Nakai constants
     else
