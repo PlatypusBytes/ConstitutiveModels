@@ -91,11 +91,12 @@ def test_strain_controlled_tension_triaxial():
     project_dir = os.getcwd()
     # check operating system
     if sys.platform == 'win32':
-        model_loc = rf"{project_dir}\build_C\lib\linear_elastic_with_vertical_tens_cutoff.dll"
+        extension = 'dll'
     elif sys.platform == 'linux':
-        model_loc = f"{project_dir}/build_C/lib/linear_elastic_with_vertical_tens_cutoff.so"
+        extension = 'so'
     else:
         raise Exception("Unsupported operating system")
+    model_loc = os.path.join(project_dir,'build_C','lib','linear_elastic_with_vertical_tens_cutoff.'+extension)
 
     const_model_info = {"language": "c",
                         "file_name":model_loc,
