@@ -29,7 +29,7 @@ jobs:
       with:
         arch: x64
     - name: Build C DLLs
-      shell: msys2 {0}
+      shell: cmd
       run: |
          nmake -f Makefile.windows
     - name: List files in build directory
@@ -78,7 +78,7 @@ jobs:
 
     - name: Build C libraries
       run: |
-        make
+        make -f Makefile.linux
       shell: bash
 
     - name: Build fortran libraries

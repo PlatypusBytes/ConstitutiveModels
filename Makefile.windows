@@ -15,7 +15,7 @@ CC = cl.exe
 # /EHsc   - Enable C++ exception handling (standard conformant) - Often good even for C with runtime interaction
 # /D_CRT_SECURE_NO_WARNINGS - Suppress common warnings about "unsafe" C functions
 # /c      - Compile only, do not link
-CFLAGS = /nologo /W3 /O2 /Zi /EHsc /D_CRT_SECURE_NO_WARNINGS /c
+CFLAGS = /nologo /W4 /O2 /Zi /EHsc  /c
 
 # Linker Flags (passed via cl.exe)
 # /LD     - Create a DLL
