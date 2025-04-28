@@ -26,11 +26,12 @@ def test_strain_controlled_compression_triaxial():
     project_dir = os.getcwd()
     # check operating system
     if sys.platform == 'win32':
-        model_loc = rf"{project_dir}\build_C\lib\matsuoka_nakai.dll"
+        extension = 'dll'
     elif sys.platform == 'linux':
-        model_loc = f"{project_dir}/build_C/lib/matsuoka_nakai.so"
+        extension = 'so'
     else:
         raise Exception("Unsupported operating system")
+    model_loc = os.path.join(project_dir,'build_C','lib','matsuoka_nakai.'+extension)
 
     const_model_info = {"language": "c",
                         "file_name":model_loc,

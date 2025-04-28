@@ -24,11 +24,13 @@ def test_strain_controlled_compression_triaxial():
     project_dir = os.getcwd()
     # check operating system
     if sys.platform == 'win32':
-        model_loc = rf"{project_dir}\fortran_models\linear_elastic\linear_elastic.dll"
+        extension = 'dll'
     elif sys.platform == 'linux':
-        model_loc = f"{project_dir}/build_Fortran/lib/linear_elastic.so"
+        extension = 'so'
     else:
         raise Exception("Unsupported operating system")
+
+    model_loc = os.path.join(project_dir,'build_fortran','lib','linear_elastic.'+extension)
 
     const_model_info = {"language": "fortran",
                         "file_name":model_loc,

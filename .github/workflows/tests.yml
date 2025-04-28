@@ -13,7 +13,7 @@ env:
     # Set the default Python version to 3.11
     PYTHON_VERSION: '3.11'
     C_LIBRARY_DIR: 'build_C/lib'
-    FORTRAN_ARTIFACTS_DIR: 'artifacts'
+    FORTRAN_LIBRARY_DIR: 'build_Fortran/lib'
 
 jobs:
   test-windows:
@@ -50,24 +50,20 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-
-    - name: List directory contents
-      run: dir /s /b
-      shell: cmd
     - name: Test with pytest
       run: pytest tests
 
     - name: Upload C libraries as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: compiled_c_dlls_windows
+        name: compiled_c_libs_windows
         path: .\${{ env.C_LIBRARY_DIR }}\*.dll
 
     - name: Upload fortran libraries as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: compiled_fortran_dlls_windows
-        path: .\fortran_models\**\*.dll
+        name: compiled_fortran_libs_windows
+        path: .\${{ env.FORTRAN_LIBRARY_DIR }}\*.dll
 
   test-linux:
     name: Test on Linux
@@ -109,5 +105,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: compiled_fortran_libs_linux
-        path: ./build_Fortran/lib/*.so
+        path: ./${{ env.FORTRAN_LIBRARY_DIR }}/*.so
 
