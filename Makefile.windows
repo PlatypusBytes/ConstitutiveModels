@@ -1,0 +1,125 @@
+# Makefile for nmake and MSVC (cl.exe)
+
+# --- Configuration ---
+SO_EXT = .dll
+OBJ_EXT = .obj
+
+# Compiler and Linker
+CC = cl.exe
+
+# Compiler Flags for MSVC
+# /nologo - Suppress logo banner
+# /W3     - Warning level 3 (adjust as needed, /W4 or /Wall)
+# /O2     - Optimize for speed (/Od for debug)
+# /Zi     - Generate comprehensive debug information (creates PDB)
+# /EHsc   - Enable C++ exception handling (standard conformant) - Often good even for C with runtime interaction
+# /D_CRT_SECURE_NO_WARNINGS - Suppress common warnings about "unsafe" C functions
+# /c      - Compile only, do not link
+CFLAGS = /nologo /W3 /O2 /Zi /EHsc /D_CRT_SECURE_NO_WARNINGS /c
+
+# Linker Flags (passed via cl.exe)
+# /LD     - Create a DLL
+# /Fe<path> - Specify output file name (use /Fe$@ for target)
+# Additional linker options can be added via /link option, e.g., /link /LIBPATH:..
+LDFLAGS = /LD
+
+# Tools
+RM = del /Q
+MKDIR = mkdir
+
+# Output directories (using backslashes for Windows/nmake convention)
+BUILD_DIR = build_C
+LIB_DIR = $(BUILD_DIR)\lib
+
+# Source directories
+C_MODELS_DIR = c_models
+ELASTIC_LAWS_DIR = $(C_MODELS_DIR)\elastic_laws
+LINEAR_ELASTIC_TENS_DIR = $(C_MODELS_DIR)\linear_elastic_with_vertical_tens_cutoff
+MATSUOKA_NAKAI_DIR = $(C_MODELS_DIR)\matsuoka_nakai
+YIELD_SURFACES_DIR = $(C_MODELS_DIR)\yield_surfaces
+
+# Include directories (using /I prefix required by cl.exe)
+INCLUDES = /I$(C_MODELS_DIR) /I$(ELASTIC_LAWS_DIR) /I$(YIELD_SURFACES_DIR)
+
+# Common object files (using OBJ_EXT)
+COMMON_OBJS = \
+	$(BUILD_DIR)\globals$(OBJ_EXT) \
+	$(BUILD_DIR)\utils$(OBJ_EXT) \
+	$(BUILD_DIR)\stress_utils$(OBJ_EXT) \
+	$(BUILD_DIR)\hookes_law$(OBJ_EXT)
+
+# Target shared libraries
+LIBS = \
+	$(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff$(SO_EXT) \
+	$(LIB_DIR)\matsuoka_nakai$(SO_EXT)
+
+# --- Targets ---
+
+# Default target
+all: directories $(LIBS)
+
+# Create necessary directories
+# Use 'if not exist ...' for robustness with nmake/cmd
+directories:
+	if not exist $(BUILD_DIR) $(MKDIR) $(BUILD_DIR)
+	if not exist $(LIB_DIR) $(MKDIR) $(LIB_DIR)
+
+# --- Compilation Rules (Explicit - Corrected for nmake) ---
+
+# Common object files compilation
+# Explicitly provide source file instead of $<
+$(BUILD_DIR)\globals$(OBJ_EXT): $(C_MODELS_DIR)\globals.c $(C_MODELS_DIR)\globals.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(C_MODELS_DIR)\globals.c
+
+$(BUILD_DIR)\utils$(OBJ_EXT): $(C_MODELS_DIR)\utils.c $(C_MODELS_DIR)\utils.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(C_MODELS_DIR)\utils.c
+
+$(BUILD_DIR)\stress_utils$(OBJ_EXT): $(C_MODELS_DIR)\stress_utils.c $(C_MODELS_DIR)\stress_utils.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(C_MODELS_DIR)\stress_utils.c
+
+$(BUILD_DIR)\hookes_law$(OBJ_EXT): $(ELASTIC_LAWS_DIR)\hookes_law.c $(ELASTIC_LAWS_DIR)\hookes_law.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(ELASTIC_LAWS_DIR)\hookes_law.c
+
+# Matsuoka-Nakai yield surface
+$(BUILD_DIR)\matsuoka_nakai_surface$(OBJ_EXT): $(YIELD_SURFACES_DIR)\matsuoka_nakai_surface.c $(YIELD_SURFACES_DIR)\matsuoka_nakai_surface.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(YIELD_SURFACES_DIR)\matsuoka_nakai_surface.c
+
+# Linear elastic with vertical tension cutoff model
+$(BUILD_DIR)\linear_elastic_with_vertical_tens_cutoff$(OBJ_EXT): $(LINEAR_ELASTIC_TENS_DIR)\linear_elastic_with_vertical_tens_cutoff.c
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(LINEAR_ELASTIC_TENS_DIR)\linear_elastic_with_vertical_tens_cutoff.c
+
+# Matsuoka-Nakai model
+$(BUILD_DIR)\matsuoka_nakai$(OBJ_EXT): $(MATSUOKA_NAKAI_DIR)\matsuoka_nakai.c
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(MATSUOKA_NAKAI_DIR)\matsuoka_nakai.c
+
+# --- Linking Rules ---
+
+# Shared libraries
+# Use $** for all prerequisites (the object files) in nmake
+$(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff$(SO_EXT): $(COMMON_OBJS) $(BUILD_DIR)\linear_elastic_with_vertical_tens_cutoff$(OBJ_EXT)
+	$(CC) $(LDFLAGS) /Fe$@ $**
+
+$(LIB_DIR)\matsuoka_nakai$(SO_EXT): $(COMMON_OBJS) $(BUILD_DIR)\matsuoka_nakai_surface$(OBJ_EXT) $(BUILD_DIR)\matsuoka_nakai$(OBJ_EXT)
+	$(CC) $(LDFLAGS) /Fe$@ $**
+
+
+# --- Maintenance Targets ---
+
+# Clean target
+# Use backslashes and target specific files/directories
+# Added .pdb cleanup and error suppression with '-'
+clean:
+	-$(RM) $(BUILD_DIR)\*$(OBJ_EXT) $(LIB_DIR)\*$(SO_EXT) $(LIB_DIR)\*.lib $(LIB_DIR)\*.exp $(BUILD_DIR)\*.pdb 2>nul
+	-if exist $(LIB_DIR) rd /S /Q $(LIB_DIR) 2>nul
+	-if exist $(BUILD_DIR) rd /S /Q $(BUILD_DIR) 2>nul
+
+
+# Help target (no changes needed)
+help:
+	@echo Available targets:
+	@echo   all       - Build all shared libraries (default)
+	@echo   clean     - Remove all build artifacts
+	@echo   help      - Show this help message
+
+# Declare phony targets (syntax is the same)
+.PHONY: all directories clean help

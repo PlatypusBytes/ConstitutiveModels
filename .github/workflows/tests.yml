@@ -24,15 +24,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: install gcc and make
-      uses: msys2/setup-msys2@v2
+    - name: Setup VS Developer Command Prompt
+      uses: ilammy/msvc-dev-cmd@v1
       with:
-        install: gcc make
-    - name: Build with MSYS2
+        arch: x64
+    - name: Build C DLLs
       shell: msys2 {0}
       run: |
-         uname -s
-         make
+         nmake -f Makefile.windows
     - name: List files in build directory
       run: dir build_C\lib
       shell: cmd

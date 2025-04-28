@@ -1,19 +1,7 @@
-# Detect OS
-UNAME_S := $(shell uname -s)
-
-ifeq ($(UNAME_S),Linux)
-    SO_EXT = .so
-    RM = rm -rf
-    MKDIR = mkdir -p
-else ifeq ($(OS),Windows_NT)  # Git Bash, MSYS, or native make on Windows
-    SO_EXT = .dll
-    RM = del /Q /S
-    MKDIR = mkdir
-endif
 
 CC = gcc
 CFLAGS = -fPIC -Wall -Wextra -O2 -g
-LDFLAGS = -static-libgcc -static-libstdc++ -shared
+LDFLAGS = -shared
 
 # Output directories
 BUILD_DIR = build_C
@@ -38,16 +26,16 @@ COMMON_OBJS = \
 
 # Target shared libraries
 LIBS = \
-	$(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff$(SO_EXT) \
-	$(LIB_DIR)/matsuoka_nakai$(SO_EXT)
+	$(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff.so \
+	$(LIB_DIR)/matsuoka_nakai.so
 
 # Default target
 all: directories $(LIBS)
 
 # Create necessary directories
 directories:
-	$(MKDIR) $(BUILD_DIR)
-	$(MKDIR) $(LIB_DIR)
+	mkdir -p $(BUILD_DIR)
+	mkdir -p $(LIB_DIR)
 
 # Common object files compilation
 $(BUILD_DIR)/globals.o: $(C_MODELS_DIR)/globals.c $(C_MODELS_DIR)/globals.h
@@ -75,15 +63,15 @@ $(BUILD_DIR)/matsuoka_nakai.o: $(MATSUOKA_NAKAI_DIR)/matsuoka_nakai.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # Shared libraries
-$(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff$(SO_EXT): $(COMMON_OBJS) $(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff.o
+$(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff.so: $(COMMON_OBJS) $(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff.o
 	$(CC) $(LDFLAGS) -o $@ $^
 
-$(LIB_DIR)/matsuoka_nakai$(SO_EXT): $(COMMON_OBJS) $(BUILD_DIR)/matsuoka_nakai_surface.o $(BUILD_DIR)/matsuoka_nakai.o
+$(LIB_DIR)/matsuoka_nakai.so: $(COMMON_OBJS) $(BUILD_DIR)/matsuoka_nakai_surface.o $(BUILD_DIR)/matsuoka_nakai.o
 	$(CC) $(LDFLAGS) -o $@ $^
 
 # Clean target
 clean:
-	$(RM) $(BUILD_DIR)
+	rm -rf $(BUILD_DIR)
 
 # Help target
 help:
