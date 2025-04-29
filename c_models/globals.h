@@ -1,6 +1,5 @@
 
-#ifndef GLOBALS_H
-#define GLOBALS_H
+#pragma once
 
 extern const double PI;        // Define PI as a constant
 extern const double ZERO_TOL;  // Define tolerance for zero checks
@@ -15,5 +14,3 @@ extern const int ZZ;  // Z component
 extern const int XY;  // XY shear component
 extern const int YZ;  // YZ shear component
 extern const int XZ;  // XZ shear component
-
-#endif  // GLOBALS_H

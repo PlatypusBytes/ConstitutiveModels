@@ -1,5 +1,4 @@
-#ifndef UTILS_H
-#define UTILS_H
+#pragma once
 
 #include "globals.h"
 
@@ -98,5 +97,4 @@ void vector_scalar_multiply(const double* vector, const double scalar, const int
  */
 void vector_outer_product(const double* vector_1, const double* vector_2, const int length_vector,
                           double* result);
-
-#endif  // UTILS_H
+ 

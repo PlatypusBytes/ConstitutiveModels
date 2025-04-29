@@ -1,6 +1,5 @@
 
-#ifndef MATSUOKA_NAKAI_SURFACE_H
-#define MATSUOKA_NAKAI_SURFACE_H
+#pragma once
 
 #include "../globals.h"
 
@@ -58,5 +57,3 @@ void calculate_yield_gradient(const double theta, const double J, const double* 
  */
 void calculate_matsuoka_nakai_constants(const double angle_rad, const double c, double* alpha,
                                         double* beta, double* gamma, double* K, double* M);
-
-#endif  // MATSUOKA_NAKAI_SURFACE_H

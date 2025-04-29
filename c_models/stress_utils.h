@@ -1,5 +1,4 @@
-#ifndef STRESS_UTILS_H
-#define STRESS_UTILS_H
+#pragma once
 
 #include "globals.h"
 
@@ -30,6 +29,3 @@ void calculate_stress_invariants_derivatives_3d(const double J, const double s_d
                                                 const double j2, const double j3,
                                                 double dp_dsig[VOIGTSIZE_3D], double dJ_dsig[VOIGTSIZE_3D],
                                                 double dtheta_dsig[VOIGTSIZE_3D]);
-
-
-#endif  // STRESS_UTILS_H

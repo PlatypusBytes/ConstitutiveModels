@@ -1,5 +1,4 @@
-#ifndef HOOKES_LAW_H
-#define HOOKES_LAW_H
+#pragma once
 
 #include "../globals.h"
 
@@ -12,5 +11,3 @@
  * @param elastic_matrix Pointer to the output stiffness matrix (6x6) in row-major order.
  */
 void calculate_elastic_stiffness_matrix_3d(double E, double nu, double elastic_matrix[VOIGTSIZE_3D * VOIGTSIZE_3D]);
-
-#endif  // HOOKES_LAW_H
