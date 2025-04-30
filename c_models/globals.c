@@ -1,5 +1,6 @@
 const double PI = 3.14159265358979323846;  // Define PI as a constant
 const double ZERO_TOL = 1.0e-12;           // Define tolerance for zero checks
+const double SMALL_VALUE = 1.0e-16;        // Define a small value for numerical stability
 
 // Define tensor component mapping (Voigt, 0-based)
 const int XX = 0;  // X component

@@ -1,8 +1,9 @@
 
 #pragma once
 
-extern const double PI;        // Define PI as a constant
-extern const double ZERO_TOL;  // Define tolerance for zero checks
+extern const double PI;           // Define PI as a constant
+extern const double ZERO_TOL;     // Define tolerance for zero checks
+extern const double SMALL_VALUE;  // Define a small value for numerical stability
 
 // use #define, so it can be used in preprocessor directives
 #define VOIGTSIZE_3D 6  // Define size of Voigt vector for 3D tensors
