@@ -99,7 +99,7 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     (void)DRPLDE;
     (void)DDSDDT;
     (void)RPL;
-    (void)SSE;
+    (void)SCD;
 
     // Check Inputs
     if (*NTENS != VOIGTSIZE_3D || *NDI != 3 || *NSHR != 3)
@@ -256,7 +256,6 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         STATEV[0] = 0.0;  // No plastic strain increment
     }
 
-    *SCD = 0.0;  // No creep
     return;
 }
 

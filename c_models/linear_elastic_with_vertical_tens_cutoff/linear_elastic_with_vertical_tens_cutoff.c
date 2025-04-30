@@ -97,6 +97,7 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     (void)DRPLDE;
     (void)DDSDDT;
     (void)RPL;
+    (void)SCD;
 
     // Check Inputs
     if (*NTENS != VOIGTSIZE_3D || *NDI != 3 || *NSHR != 3)
@@ -150,12 +151,12 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     if (sigma_normal_trial > tension_threshold)
     {
         // elastic normal stiffness
-        double elastic_normal_stiffness =
+        const double elastic_normal_stiffness =
             DDSDDE_elastic[normal_axis_index * VOIGTSIZE_3D + normal_axis_index];
 
         // calculate elastic and plastic strains
-        double dEps_el = (tension_threshold - STRESS[normal_axis_index]) / elastic_normal_stiffness;
-        double dEps_pl = DSTRAN[normal_axis_index] - dEps_el;
+        const double dEps_el = (tension_threshold - STRESS[normal_axis_index]) / elastic_normal_stiffness;
+        const double dEps_pl = DSTRAN[normal_axis_index] - dEps_el;
 
         // Copy the trial stress to the output stress
         copy_array(DSTRAN, VOIGTSIZE_3D, elastic_delta_strain_vector);
@@ -191,8 +192,6 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 
         STATEV[0] = 0.0;  // Indicate elastic state
     }
-
-    *SCD = 0.0;  // No creep
 
     return;
 }
