@@ -1,5 +1,5 @@
-#include <stdio.h>
 #include <math.h>
+#include <stdio.h>
 
 #include "../elastic_laws/hookes_law.h"
 #include "../globals.h"
@@ -15,6 +15,15 @@
 #define UMAT_EXPORT
 #define UMAT_CALLCONV
 #endif
+
+/**
+ * @brief Function to check the validity of material properties.
+ *
+ * @param[in]  NPROPS Number of properties.
+ * @param[in]  PROPS Pointer to the array of material properties.
+ * @return 0 if properties are valid, 1 otherwise.
+ */
+int check_properties(const int NPROPS, const double* PROPS);
 
 // Define the UMAT function signature expected by the FEA software.
 //       Check your specific FEA software documentation for exact C interface requirements if
@@ -63,7 +72,34 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     // Note: Size of CMNAME requires careful handling between C and Fortran
 )
 {
-    // --- 0. Check Inputs ---
+    // avoid unused variable warnings
+    (void)KINC;
+    (void)KSTEP;
+    (void)KSPT;
+    (void)LAYER;
+    (void)NPT;
+    (void)NOEL;
+    (void)DFGRD0;
+    (void)DFGRD1;
+    (void)CELENT;
+    (void)PNEWDT;
+    (void)DROT;
+    (void)COORDS;
+    (void)CMNAME;
+    (void)DPRED;
+    (void)PREDEF;
+    (void)DTEMP;
+    (void)TEMP;
+    (void)DTIME;
+    (void)TIME;
+    (void)STRAN;
+    (void)DRPLDT;
+    (void)DRPLDE;
+    (void)DDSDDT;
+    (void)RPL;
+    (void)SCD;
+
+    // Check Inputs
     if (*NTENS != VOIGTSIZE_3D || *NDI != 3 || *NSHR != 3)
     {
         // Handle error - This UMAT is specifically for 3D
@@ -73,50 +109,72 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         // exit(1); // Avoid exiting in production code if possible
         return;  // Or try to handle gracefully
     }
-    if (*NPROPS < 4)
+    if (check_properties(*NPROPS, PROPS))
     {
-        fprintf(stderr, "UMAT Error: NPROPS < 3. Requires E, nu, tension_threshold and normal_axis_index\n");
+        fprintf(stderr, "UMAT Error: invalid material properties.\n");
         return;
     }
+
+    // state variable is 0 no tension cut-off, 1 tension cut-off
     if (*NSTATV < 1)
     {
         fprintf(stderr, "UMAT Error: NSTATV < 1. Requires at least 1 state variable.\n");
         return;
     }
 
-    // Material Properties ---
+    // Material Properties
     double E = PROPS[0];                  // Young's Modulus
     double nu = PROPS[1];                 // Poisson's Ratio
     double tension_threshold = PROPS[2];  // Tensile strength threshold in Y
-    int normal_axis_index = (int)round(PROPS[3]); // Normal axis for tension cutoff (1 for Y, 2 for Z)
+    int normal_axis_index =
+        (int)round(PROPS[3]);  // Normal axis for tension cutoff (0 for X, 1 for Y, 2 for Z)
 
-    // Calculate Elastic Stiffness Matrix (DDSDDE_elastic) ---
     double DDSDDE_elastic[VOIGTSIZE_3D * VOIGTSIZE_3D];
+    double delta_stress[VOIGTSIZE_3D];
+    double stress_trial[VOIGTSIZE_3D];
+    double elastic_delta_strain_vector[VOIGTSIZE_3D];
+
+    // Calculate Elastic Stiffness Matrix (DDSDDE_elastic)
     calculate_elastic_stiffness_matrix_3d(E, nu, DDSDDE_elastic);
 
-    // Calculate Elastic Trial Stress ---
+    // Calculate Elastic Trial Stress
     // delta_stress = D * DSTRAN
-    double delta_stress[VOIGTSIZE_3D];
     matrix_vector_multiply(DDSDDE_elastic, DSTRAN, VOIGTSIZE_3D, delta_stress);
 
     // stress_trial = STRESS + delta_stress
-    double stress_trial[VOIGTSIZE_3D];
     add_vectors(STRESS, delta_stress, VOIGTSIZE_3D, stress_trial);
 
-    // Apply Tension Cutoff Logic ---
+    // Apply Tension Cutoff Logic
     // Check normal stress component
     const double sigma_normal_trial = stress_trial[normal_axis_index];
 
     if (sigma_normal_trial > tension_threshold)
     {
-        //  Update Stress, Jacobian, and State Variables ---
+        // elastic normal stiffness
+        const double elastic_normal_stiffness =
+            DDSDDE_elastic[normal_axis_index * VOIGTSIZE_3D + normal_axis_index];
+
+        // calculate elastic and plastic strains
+        const double dEps_el = (tension_threshold - STRESS[normal_axis_index]) / elastic_normal_stiffness;
+        const double dEps_pl = DSTRAN[normal_axis_index] - dEps_el;
+
+        // Copy the trial stress to the output stress
+        copy_array(DSTRAN, VOIGTSIZE_3D, elastic_delta_strain_vector);
+        elastic_delta_strain_vector[normal_axis_index] = dEps_el;
+
+        // calculate elastic and plastic strain energy
+        *SSE += vector_dot_product(STRESS, elastic_delta_strain_vector,
+                                   VOIGTSIZE_3D);  // Specific elastic strain energy
+        *SPD += tension_threshold * dEps_pl;       // Specific plastic strain dissipation
+
+        //  Update Stress, Jacobian, and State Variables
         // Tension cutoff is active: set vertical stress to the threshold
         STRESS[normal_axis_index] = tension_threshold;
 
         // set stiffness matrix terms to a small value for numerical stability
         // DDSDDE = DDSDDE_elastic * small_value
-        double small_value = 1.0e-16;
-        vector_scalar_multiply(DDSDDE_elastic, small_value, VOIGTSIZE_3D * VOIGTSIZE_3D, DDSDDE);
+
+        vector_scalar_multiply(DDSDDE_elastic, SMALL_VALUE, VOIGTSIZE_3D * VOIGTSIZE_3D, DDSDDE);
 
         STATEV[0] = 1.0;  // Indicate cutoff state
     }
@@ -130,8 +188,51 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         // Copy the elastic stiffness matrix to the output Jacobian
         copy_array(DDSDDE_elastic, VOIGTSIZE_3D * VOIGTSIZE_3D, DDSDDE);
 
+        *SSE += vector_dot_product(STRESS, DSTRAN, VOIGTSIZE_3D);  // Specific elastic strain energy
+
         STATEV[0] = 0.0;  // Indicate elastic state
     }
 
     return;
+}
+
+int check_properties(const int NPROPS, const double* PROPS)
+{
+    if (NPROPS < 4)
+    {
+        fprintf(
+            stderr,
+            "UMAT Error: NPROPS < 4. Requires E, nu, tension_threshold and normal_axis_index\n");
+        return 1;
+    }
+
+    int n_errors = 0;
+
+    if (PROPS[0] <= 0.0)
+    {
+        fprintf(stderr, "UMAT Error: Young's Modulus must be positive.\n");
+        n_errors++;
+    }
+    if (PROPS[1] < 0.0 || PROPS[1] >= 0.5)
+    {
+        fprintf(stderr, "UMAT Error: Poisson's Ratio must be between [0.0, 0.5).\n");
+        n_errors++;
+    }
+    if (PROPS[2] < 0.0)
+    {
+        fprintf(stderr, "UMAT Error: tension_threshold must be non-negative.\n");
+        n_errors++;
+    }
+    const int normal_axis_index = (int)round(PROPS[3]);
+    if (normal_axis_index < 0 || normal_axis_index > 2)
+    {
+        fprintf(stderr, "UMAT Error: normal_axis_index should be either 0, 1 or 2 .\n");
+        n_errors++;
+    }
+
+    if (n_errors > 0)
+    {
+        return 1;
+    }
+    return 0;  // All checks passed
 }

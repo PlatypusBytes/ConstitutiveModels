@@ -1,5 +1,6 @@
 name: Tests
 
+
 # Controls when the workflow will run
 on:
   pull_request:
@@ -8,53 +9,98 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+env:
+    # Set the default Python version to 3.11
+    PYTHON_VERSION: '3.11'
+    C_LIBRARY_DIR: 'build_C/lib'
+    FORTRAN_LIBRARY_DIR: 'build_Fortran/lib'
+
 jobs:
-  test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-#        os: [ubuntu-latest, windows-latest]
-        os: [windows-latest]
-        python-version: ['3.11']
+  test-windows:
+    name: Test on Windows
+    runs-on: windows-latest
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Setup VS Developer Command Prompt
       uses: ilammy/msvc-dev-cmd@v1
       with:
         arch: x64
-
     - name: Build C DLLs
-      run: |
-        call compile_c_models.bat
       shell: cmd
+      run: |
+         nmake -f Makefile.windows
 
-    - name: Build fortran DLLs with gfortran
+    - name: Build fortran DLLs
       run: call compile_fortran_models.bat
       shell: cmd
 
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.11
       uses: actions/setup-python@v2
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: ${{ env.PYTHON_VERSION }}
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+
     - name: Test with pytest
       run: pytest tests
 
-    - name: Upload c DLLs as artifact
+    - name: Upload C libraries as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: compiled_c_dlls
-        path: .\c_models\**\*.dll
+        name: compiled_c_libs_windows
+        path: .\${{ env.C_LIBRARY_DIR }}\*.dll
 
-    - name: Upload fortran DLLs as artifact
+    - name: Upload fortran libraries as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: compiled_fortran_dlls
-        path: .\fortran_models\**\*.dll
+        name: compiled_fortran_libs_windows
+        path: .\${{ env.FORTRAN_LIBRARY_DIR }}\*.dll
+
+  test-linux:
+    name: Test on Linux
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build C libraries
+      run: |
+        make -f Makefile.linux
+      shell: bash
+
+    - name: Build fortran libraries
+      run: |
+        bash compile_fortran_models.sh
+      shell: bash
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Test with pytest
+      run: pytest tests
+
+    - name: Upload C libraries as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: compiled_c_libs_linux
+        path: ./${{ env.C_LIBRARY_DIR }}/*.so
+
+    - name: Upload fortran libraries as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: compiled_fortran_libs_linux
+        path: ./${{ env.FORTRAN_LIBRARY_DIR }}/*.so
 

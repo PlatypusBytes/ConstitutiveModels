@@ -4,11 +4,10 @@ from tests.utils import Utils
 
 
 VERTICAL_AXIS_INDEX = 1 # [0, 1, 2] = [x, y, z]
-NDIM = 3
 
 class IncrDriver:
     def __init__(self,initial_stress, strain_increment, stress_increment, constitutive_model_info, n_time_steps,
-                 max_iterations, voight_size=6):
+                 max_iterations, voigt_size=6, ndim=3):
         """
         Initialize the IncrDriver class.
 
@@ -19,7 +18,8 @@ class IncrDriver:
             constitutive_model_info (dict): Information about the constitutive model, including language and file name.
             n_time_steps (int): The number of time steps to solve.
             max_iterations (int): The maximum number of iterations per time step for the solver.
-            voight_size (int): The size of the Voigt notation for stress/strain vectors. Default is 6 (3D).
+            voigt_size (int): The size of the Voigt notation for stress/strain vectors. Default is 6 (3D).
+            ndim (int): The number of dimensions for the problem. Default is 3 (3D).
 
         """
 
@@ -29,7 +29,8 @@ class IncrDriver:
         self.constitutive_model_info = constitutive_model_info
         self.n_time_steps = n_time_steps
         self.max_iterations = max_iterations
-        self.voight_size = voight_size
+        self.voigt_size = voigt_size
+        self.ndim = ndim
 
         self.stresses = []
         self.strains = []
@@ -39,7 +40,7 @@ class IncrDriver:
         Solve the oedometer problem with strain control.
 
         """
-        control_type = np.zeros(self.voight_size)
+        control_type = np.zeros(self.voigt_size)
 
         self.solve(control_type)
 
@@ -51,7 +52,7 @@ class IncrDriver:
 
         """
 
-        control_type = np.zeros(self.voight_size)
+        control_type = np.zeros(self.voigt_size)
         control_type[VERTICAL_AXIS_INDEX] = 1
 
         self.solve(control_type)
@@ -64,9 +65,9 @@ class IncrDriver:
 
         """
 
-        control_type = np.zeros(self.voight_size)
+        control_type = np.zeros(self.voigt_size)
 
-        control_type[:NDIM] = 1
+        control_type[:self.ndim] = 1
         control_type[VERTICAL_AXIS_INDEX] = 0
 
         self.solve(control_type)
@@ -77,8 +78,8 @@ class IncrDriver:
 
         """
 
-        control_type = np.zeros(self.voight_size)
-        control_type[:NDIM] = 1
+        control_type = np.zeros(self.voigt_size)
+        control_type[:self.ndim] = 1
 
         self.solve(control_type)
 
@@ -93,35 +94,23 @@ class IncrDriver:
         """
 
 
-
         language = self.constitutive_model_info['language']
-        stress_updated, ddsdde, statev_updated = None, None, None
+        if language == "c":
+            runner = Utils.run_c_umat
+        elif language == "fortran":
+            runner = Utils.run_fortran_umat
+        else:
+            raise ValueError(f"Language {language} not supported. Only 'c' and 'fortran' are supported.")
 
         state_variables = self.constitutive_model_info['state_vars']
 
         # run umat in order to retrieve the elastic matrix
-        if language == "c":
-            _, ddsdde, _ = Utils.run_c_umat(self.constitutive_model_info['file_name'],
-                                            self.initial_stress,
-                                            np.copy(state_variables),
-                                            np.zeros(self.voight_size),
-                                            np.zeros(self.voight_size),
-                                            self.constitutive_model_info["properties"], 0)
-
-
-        elif language == "fortran":
-            _, ddsdde, _ = Utils.run_fortran_umat(self.constitutive_model_info['file_name'],
-                                                  self.initial_stress,
-                                                  np.copy(state_variables),
-                                                  np.zeros(self.voight_size),
-                                                  np.zeros(self.voight_size),
-                                                  self.constitutive_model_info["properties"], 0)
-
-        else:
-            ValueError(f"Language {language} not supported. Only 'c' and 'fortran' are supported.")
+        _, ddsdde, _ = runner(self.constitutive_model_info['file_name'], self.initial_stress, np.copy(state_variables),
+                              np.zeros(self.voigt_size), np.zeros(self.voigt_size),
+                              self.constitutive_model_info["properties"], 0)
 
         # initialize stress and strain vectors
-        strain_vector = np.zeros(self.voight_size)
+        strain_vector = np.zeros(self.voigt_size)
         stress_vector = np.copy(self.initial_stress)
 
         stresses = []
@@ -131,8 +120,8 @@ class IncrDriver:
         for t in range(self.n_time_steps):
 
             delta_strain = np.copy(self.strain_increment)
-            correction_delta_strain = np.zeros(self.voight_size)
-            approx_delta_stress = np.zeros(self.voight_size)
+            correction_delta_strain = np.zeros(self.voigt_size)
+            approx_delta_stress = np.zeros(self.voigt_size)
 
             # save the stress vector of the previous time step
             old_d_stress_vector = np.copy(stress_vector)
@@ -156,25 +145,10 @@ class IncrDriver:
                 delta_strain = delta_strain - correction_delta_strain
 
                 # run constitutive model
-                if language == "c":
-                    stress_updated, ddsdde, state_variables = Utils.run_c_umat(self.constitutive_model_info['file_name'],
-                                                                              stress_vector,
-                                                                              state_variables,
-                                                                              strain_vector,
-                                                                              delta_strain,
-                                                                              self.constitutive_model_info[
-                                                                                  "properties"], t)
-                elif language == "fortran":
-                    stress_updated, ddsdde, state_variables = Utils.run_fortran_umat(self.constitutive_model_info['file_name'],
-                                                                              stress_vector,
-                                                                              state_variables,
-                                                                              strain_vector,
-                                                                              delta_strain,
-                                                                              self.constitutive_model_info[
-                                                                                  "properties"], t)
-                else:
-                    ValueError(f"Language {language} not supported. Only 'c' and 'fortran' are supported.")
-
+                stress_updated, ddsdde, state_variables = runner(self.constitutive_model_info['file_name'],
+                                                                 stress_vector, state_variables, strain_vector,
+                                                                 delta_strain,
+                                                                 self.constitutive_model_info["properties"], t)
 
                 # if not at max iterations, update the approximation for delta stress and reset stress vector and state
                 # variables

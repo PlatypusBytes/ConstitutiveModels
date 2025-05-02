@@ -6,7 +6,7 @@
 
 void calculate_stress_invariants_3d(const double stress[VOIGTSIZE_3D], double* p, double* J,
                                     double* theta, double* j2, double* j3,
-                                    double s_dev[VOIGTSIZE_3D])  // s_dev is output
+                                    double s_dev[VOIGTSIZE_3D])
 {
     // Mean stress pressure p = trace(sigma)/3
     *p = (stress[XX] + stress[YY] + stress[ZZ]) / 3.0;
@@ -36,23 +36,23 @@ void calculate_stress_invariants_3d(const double stress[VOIGTSIZE_3D], double* p
         double arg = (sqrt(27.0) / 2.0) * (*j3) / pow(*j2, 1.5);
 
         // Clamp argument to asin range [-1, 1] due to potential numerical inaccuracies
-        if (arg > 1.0) arg = 1.0;
-        if (arg < -1.0) arg = -1.0;
+        double zero_tolerance = 0.0;
+        if (arg > 1.0)
+        {
+            arg = 1.0;
+            zero_tolerance = -ZERO_TOL;
+        }
+        if (arg < -1.0)
+        {
+            arg = -1.0;
+            zero_tolerance = ZERO_TOL;
+        }
 
-        *theta = asin(arg) / 3.0;  // Result is in [-pi/6, pi/6]
+        *theta = asin(arg) / 3.0 + zero_tolerance;  // Result is in [-pi/6, pi/6]
     }
     else
     {
         *theta = 0.0;  // Set to convention if J is zero
-    }
-    // Ensure theta is within [-pi/6, pi/6] range
-    if (*theta < -(PI / 6.0) + ZERO_TOL)
-    {
-        *theta = -(PI / 6.0) + ZERO_TOL;
-    }
-    else if (*theta > (PI / 6.0) - ZERO_TOL)
-    {
-        *theta = (PI / 6.0) - ZERO_TOL;
     }
 }
 
@@ -62,33 +62,32 @@ void calculate_stress_invariants_derivatives_3d(const double J, const double s_d
                                                 double dJ_dsig[VOIGTSIZE_3D],
                                                 double dtheta_dsig[VOIGTSIZE_3D])
 {
-    // 2. Derivatives of invariants w.r.t. sigma (in Voigt)
+    // Derivatives of invariants w.r.t. sigma (in Voigt)
     // dp/dsigma = [1/3, 1/3, 1/3, 0, 0, 0]^T
-    dp_dsig[0] = 1.0 / 3.0;
-    dp_dsig[1] = 1.0 / 3.0;
-    dp_dsig[2] = 1.0 / 3.0;
-    dp_dsig[3] = 0.0;
-    dp_dsig[4] = 0.0;
-    dp_dsig[5] = 0.0;
+    dp_dsig[XX] = 1.0 / 3.0;
+    dp_dsig[YY] = 1.0 / 3.0;
+    dp_dsig[ZZ] = 1.0 / 3.0;
+    dp_dsig[XY] = 0.0;
+    dp_dsig[YZ] = 0.0;
+    dp_dsig[XZ] = 0.0;
 
     // calculate dJ/dsigma
-
     if (J < ZERO_TOL)
     {
         // Handle case where q is very small or zero
         for (int i = 0; i < VOIGTSIZE_3D; ++i)
         {
-            dJ_dsig[i] = 0.0;  // Set to zero or some other value as needed
+            dJ_dsig[i] = 0.0;  // Set to zero
         }
     }
     else
     {
-        dJ_dsig[0] = s_dev[XX] / (2.0 * J);
-        dJ_dsig[1] = s_dev[YY] / (2.0 * J);
-        dJ_dsig[2] = s_dev[ZZ] / (2.0 * J);
-        dJ_dsig[3] = s_dev[XY] / J;
-        dJ_dsig[4] = s_dev[YZ] / J;
-        dJ_dsig[5] = s_dev[XZ] / J;
+        dJ_dsig[XX] = s_dev[XX] / (2.0 * J);
+        dJ_dsig[YY] = s_dev[YY] / (2.0 * J);
+        dJ_dsig[ZZ] = s_dev[ZZ] / (2.0 * J);
+        dJ_dsig[XY] = s_dev[XY] / J;
+        dJ_dsig[YZ] = s_dev[YZ] / J;
+        dJ_dsig[XZ] = s_dev[XZ] / J;
     }
 
     // dtheta/dsigma = (dtheta/dJ2)*(dJ2/dsig) + (dtheta/dJ3)*(dJ3/dsig)
@@ -117,12 +116,7 @@ void calculate_stress_invariants_derivatives_3d(const double J, const double s_d
     const double inner_term = 1.0 - (27.0 * j3 * j3) / (4.0 * pow(j2, 3.0));
 
     // prevent sqrt zero
-    if (inner_term < ZERO_TOL)
-    {
-        dtheta_dJ2 = 0.0;
-        dtheta_dJ3 = 0.0;
-    }
-    else
+    if (inner_term > ZERO_TOL)
     {
         dtheta_dJ2 = -pow(3.0, 1.5) * j3 / (4.0 * pow(j2, 2.5) * sqrt(inner_term));
         dtheta_dJ3 = sqrt(3.0) / sqrt(4.0 * pow(j2, 3.0) - 27.0 * j3 * j3);

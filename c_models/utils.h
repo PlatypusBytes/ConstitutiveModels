@@ -1,5 +1,6 @@
-#ifndef UTILS_H
-#define UTILS_H
+#pragma once
+
+#include "globals.h"
 
 /**
  * @brief Calculates the determinant of a 3D tensor represented in Voigt notation.
@@ -12,7 +13,7 @@
  * notation.
  * @return The determinant of the corresponding 3×3 tensor.
  */
-double calculate_determinant_voigt_vector_3d(const double* vector);
+double calculate_determinant_voigt_vector_3d(const double vector[VOIGTSIZE_3D]);
 
 /**
  * @brief Computes the dot product of two vectors.
@@ -96,5 +97,3 @@ void vector_scalar_multiply(const double* vector, const double scalar, const int
  */
 void vector_outer_product(const double* vector_1, const double* vector_2, const int length_vector,
                           double* result);
-
-#endif  // UTILS_H
