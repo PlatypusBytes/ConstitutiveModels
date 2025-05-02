@@ -60,7 +60,7 @@ MatsuokaNakaiConstants calculate_matsuoka_nakai_constants(const double angle_rad
     double gamma;
 
     // if angle_rad is zero, return tresca constants
-    if (abs(angle_rad) < ZERO_TOL)
+    if (fabs(angle_rad) < ZERO_TOL)
     {
         M = 0.0;
         K = 0.0;
