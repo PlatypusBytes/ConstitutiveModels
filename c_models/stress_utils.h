@@ -1,6 +1,7 @@
 #ifndef STRESS_UTILS_H
 #define STRESS_UTILS_H
 
+#include "globals.h"
 
 /**
  * @brief calculates stress invariants for 3D stress tensor
@@ -30,5 +31,7 @@ void calculate_stress_invariants_derivatives_3d(const double J, const double* s_
                                                 double* dp_dsig, double* dJ_dsig,
                                                 double* dtheta_dsig);
 
+
+void calculate_principle_stresses_3d(const double stress[VOIGTSIZE_3D], double principle_stresses[3])
 
 #endif  // STRESS_UTILS_H

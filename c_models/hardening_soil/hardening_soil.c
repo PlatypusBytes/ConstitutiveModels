@@ -128,14 +128,25 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     double dJ_dsig[VOIGTSIZE_3D];
     double dtheta_dsig[VOIGTSIZE_3D];
 
+    double principle_stresses[3];
 
-    //todo fix this, this is only correct in 3d triaxial test
-    sigma_3 = STRESS[ZZ];  // Assuming sigma_3 is the vertical stress component
+    calculate_principle_stresses(STRESS, principle_stresses);
+
+    double sigma_1 = principle_stresses[0];
+    double sigma_2 = principle_stresses[1];
+    double sigma_3 = principle_stresses[2];
 
     double stress_dependency_factor = calculate_stress_dependency_factor(c, phi_rad, p_ref, sigma_3, m);
     double E_50 = E_50_ref * stress_dependency_factor; // confining stiffness for primary loading
     double E_oed = E_oed_ref * stress_dependency_factor;
     double E_ur = E_ur_ref * stress_dependency_factor; // unloading/reloading stiffness
+
+
+    // initialization
+    // run mohr coulomb
+
+
+
 
     // --- 1. Calculate Elastic Stiffness Matrix ---
     calculate_elastic_stiffness_matrix_3d(E_mod, nu, Ce_matrix);
@@ -248,7 +259,209 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 
 double calculate_stress_dependency_factor(const double c, const double phi_rad, const double p_ref, const double sigma_3, const double m)
 {
-const double c_cos_phi = c * cos(phi_rad);
-double factor = pow((c_cos_phi - sigma_3*sin(phi_rad))/(c_cos_phi + p_ref * sin(phi_rad)),m);
-return factor;
+    const double c_cos_phi = c * cos(phi_rad);
+    double factor = pow((c_cos_phi - sigma_3*sin(phi_rad))/(c_cos_phi + p_ref * sin(phi_rad)),m);
+    return factor;
+}
+
+void calculate_stress_on_yield_surface()
+{
+    double f_tension = get_tension_yield_value(tension_cutoff, princ_stress)
+
+    double f_cone = get_cone_yield_value(cone_cutoff, princ_stress)
+
+//    double f_complimentary = get_complementary_yield_value(complementary_cutoff, princ_stress)
+
+    double f_cap = cap_yield_function(q_special, M, p, pc)
+
+
+     if (f_cone > ZERO_TOL)
+     {
+         if (f_tension > ZERO_TOL)
+         {
+             // first cone hardening
+             int is_converged = calculate_cone_hardening();
+
+             if (is_converged)
+             {
+
+                 double pc_state_var = pc; // todo change this
+
+                 double f_r_cap = cap_yield_function(q_special, M, p, pc_state_var)
+
+                 if (f_r_cap > ZERO_TOL)
+                 {
+                      if (f_cap > ZERO_TOL)
+                      {
+
+                           is_converged = calculate_cone_and_cap_hardening();
+
+                      }
+                      else {
+                        is_converged = calculate_cap_hardening();
+                      }
+                      if (is_converged)
+                      {
+                          double f_r_tension = get_tension_yield_value(tension_cutoff, princ_stress)
+                          if (f_r_tension > ZERO_TOL)
+                          {
+                             is_converged = 0;
+                             int is_tension = 1;
+                          }
+
+                      }
+                 }
+                 return
+             }
+             if (is_tension)
+             {
+                 double c_cot_phi = c / tan(phi_rad);
+                 if (c_cot_phi > ZERO_TOL && c_cot_phi > tension_cutoff)
+                 {
+                    is_converged = calculate_cone_hardening_with_tension();
+                    if (is_converged)
+                    {
+                        return
+                    }
+                    else
+                    {
+                        is_converged = tension_criterium();
+                        return
+                    }
+                 }
+                 else
+                 {
+                     is_converged = tension_criterium();
+                     return
+                 }
+             }
+             if (!is_converged && !is_tension)
+             {
+                fprintf(stderr, "UMAT Error: (no tension or convergence, maybe close to c_cot_phi?).\n");
+             }
+
+
+
+
+
+         }
+         else
+         {
+            is_converged = calculate_cone_hardening();
+
+            if (!is_converged && !is_tension)
+            {
+                fprintf(stderr, "UMAT Error: (no tension or convergence, maybe close to c_cot_phi?).\n");
+            }
+
+            // check cap later
+         }
+     }
+     else
+     {
+        if(f_cap > ZERO_TOL)
+        {
+            is_converged = calculate_cap_hardening();
+
+            if (is_converged)
+            {
+               double f_r_tension = get_tension_yield_value(tension_cutoff, princ_stress)
+               if(f_r_tension > ZERO_TOL)
+               {
+                  is_converged = 0;
+                  int is_tension = 1;
+                  return
+               }
+
+            }
+
+            if (is_converged)
+            {
+                double f_r_cone = get_cone_yield_value(cone_cutoff, princ_stress)
+
+                if (f_r_cone > ZERO_TOL)
+                {
+                    is_converged = calculate_cone_and_cap_hardening();
+                    if (is_converged)
+                    {
+                        return;
+                    }
+                    else
+                    {
+                        is_converged = cone_hardening();
+                        return;
+                    }
+                }
+                else
+                {
+                    return;
+                }
+            }
+            else
+            {
+                return;
+            }
+
+        }
+        else if (f_tension > ZERO_TOL)
+        {
+            is_converged = tension_criterium();
+            return;
+        }
+
+     }
+     else{
+         // elastic
+         is_converged = 1;
+         is_tension = 0;
+         return;
+
+     }
+
+     if (!is_converged)
+     {
+        if (is_tension)
+         {
+             is_converged = tension_criterium();
+             return;
+         }
+     }
+     else{
+         // check cap
+
+         f_r_cap = cap_yield_function(q_special, M, p, pc_state_var);
+         if (f_r_cap > ZERO_TOL)
+         {
+             if (f_cap > ZERO_TOL)
+             {
+                 if ( f_cone > ZERO_TOL)
+                 {
+                    is_converged = calculate_cone_and_cap_hardening();
+
+                    if ( is_converged)
+                    {
+                        f_r_tension = get_tension_yield_value(tension_cutoff, princ_stress)
+                        if (f_r_tension > ZERO_TOL)
+                        {
+                            is_converged = 0;
+                            is_tension = 1;
+                            return
+                        }
+                    }
+                    else
+                    {
+                        is_converged = calculate_cap_hardening();
+                    }
+                 }
+             }
+             else
+             {
+                is_converged = calculate_cap_hardening();
+             }
+         }
+
+     }
+
+
+
 }

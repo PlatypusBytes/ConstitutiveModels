@@ -6,21 +6,58 @@ double shear_yield_function(const double q_a,const double q, const double E_50, 
 //double f_1 = q_a/E_50 * q /(q_a - q) - 2* q/ E_ur - gamma_ps;
 
 // plaxis manual:
-double f_1 = q_a/E_50 * q /(q_a - q) - 2* q/ E_ur - gamma_ps;
+
+double f_1 = 2 * q_a/E_50 * q /(q_a - q) - 2* q/ E_ur - gamma_ps;
 
 return f_1;
 
 }
 
-double cap_yield_function(const double q, const double M, const double r, const double p, const double pc)
-{
-    // Cap yield function
-    double f_2 = q * q / (M*M * r*r) + p*p - pc*pc;
 
-    return f_2;
+void calculate_dqa_dsigma(double dqadsigma[VOIGTSIZE_3D], const double phi_rad, const double R_f)
+{
+    for (int i = 0; i < VOIGTSIZE_3D; ++i)
+    {
+        dqadsigma[i] = 0.0;
+    }
+
+    dqadsigma[2] = -2.0*sin(phi_rad) / (1.0 - sin(phi_rad)) / R_f;
+
 }
 
-double cap_yield_function(const double q_special, const double M, const double r, const double p, const double pc)
+void derivative_shear_yield_function(const double q_a, const double q, const double E_50, const double E_ur, const double gamma_ps, double dfdq[VOIGTSIZE_3D])
+{
+    // derivative of shear yield function
+
+    double dqdsigma[VOIGTSIZE_3D];
+    calculate_dq_dsigma_triaxial_state_3d(dqdsigma)
+
+
+    double dqadsigma[VOIGTSIZE_3D];
+    calculate_dqa_dsigma(dqadsigma, phi_rad_peak, R_f);
+
+    double dfdq = (2.0 * q_a*q_a) / (E_50 * pow((q_a - q),2.0)) - 2.0 / E_ur
+
+    double dfdqa = - (2 * q*q_a) / (E_50 * pow((q_a - q),2))
+
+    double dfds[VOIGTSIZE_3D];
+
+    for( int i = 0; i < VOIGTSIZE_3D; ++i)
+    {
+        dfdq[i] = dfdq * dqdsigma[i] + dfdqa * dqadsigma[i];
+    }
+
+}
+
+//double cap_yield_function(const double q, const double M, const double r, const double p, const double pc)
+//{
+//    // Cap yield function
+//    double f_2 = q * q / (M*M * r*r) + p*p - pc*pc;
+//
+//    return f_2;
+//}
+
+double cap_yield_function(const double q_special, const double M, const double p, const double pc)
 {
     // Cap yield function from plaxis manual
     double f_2 = q_special * q_special / (M*M ) + p*p - pc*pc;
@@ -28,18 +65,30 @@ double cap_yield_function(const double q_special, const double M, const double r
     return f_2;
 }
 
+double derivative_cap_yield_function(const double q_special, const double M, const double p,)
+{
+    // Cap yield function
+    dqdsigma = calcukate_dqds();
+    dpdsigma = calculate_dpdsigma();
+
+
+    double dfds = 2.0 * q_special / (M*M) * dqdsigma + 2.0*p * dpdsigma;
+
+    return dfds;
+}
+
 double calculate_special_deviatoric_stress(const double sigma_1, const double sigma_2, const double sigma_3, const double phi_rad)
 {
-const double alpha = 3 + sin(phi_rad) / (1 - sin(phi_rad));
+    const double alpha = 3 + sin(phi_rad) / (1 - sin(phi_rad));
 
-// triaxial compression
-if (abs(-sigma_2 - sigma_3) < EPSILON)
-{
-    return -(sigma_1-sigma_3);
-}
-if (-sigma_1 > -sigma)
+    // triaxial compression
+    if (abs(-sigma_2 - sigma_3) < EPSILON)
+    {
+        return -(sigma_1-sigma_3);
+    }
+    if (-sigma_1 > -sigma)
 
-return sigma_1 + (alpha -1) * sigma_2 - alpha* sigma_3;
+    return sigma_1 + (alpha -1) * sigma_2 - alpha* sigma_3;
 
 }
 

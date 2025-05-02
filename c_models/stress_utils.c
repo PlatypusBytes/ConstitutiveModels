@@ -134,3 +134,33 @@ void calculate_stress_invariants_derivatives_3d(const double J, const double s_d
         dtheta_dsig[i] = dtheta_dJ2 * dJ2_dsig[i] + dtheta_dJ3 * dJ3_dsig[i];
     }
 }
+
+
+void calculate_principle_stresses_3d(const double stress[VOIGTSIZE_3D], double principle_stresses[3])
+{
+
+    double mean_stress;
+    double J;
+    double theta;
+    double j2;
+    double j3;
+    double deviatoric_stress[VOIGTSIZE_3D];
+
+    calculate_stress_invariants_3d(stress, mean_stress,J, theta, j2,j3, deviatoric_stress)
+
+    principle_stresses[0] = mean_stress + sqrt(4 * j2 / 3) * cos(theta)
+    principle_stresses[1] = mean_stress + sqrt(4 * j2 / 3) * cos(theta - 2 * PI / 3)
+    principle_stresses[2] = mean_stress + sqrt(4 * j2 / 3) * cos(theta + 2 * PI / 3);
+
+}
+
+void calculate_dq_dsigma_triaxial_state_3d(double dqdsigma[VOIGTSIZE_3D])
+{
+    for (int i = 0; i < VOIGTSIZE_3D; ++i)
+    {
+        dqdsigma[i] = 0.0;
+    }
+
+    dqdsigma[0] = 1;
+    dqdsigma[2] = -1;
+}
