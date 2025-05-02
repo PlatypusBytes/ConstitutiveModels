@@ -23,7 +23,7 @@
  *
  * @param[in]  NPROPS Number of properties.
  * @param[in]  PROPS Pointer to the array of material properties.
- * @return 1 if properties are valid, 0 otherwise.
+ * @return 0 if properties are valid, 1 otherwise.
  */
 int check_properties(const int NPROPS, const double* PROPS);
 
