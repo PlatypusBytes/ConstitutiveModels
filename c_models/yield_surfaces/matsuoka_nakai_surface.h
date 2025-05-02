@@ -19,7 +19,6 @@
  */
 typedef struct
 {
-    double angle_rad;  ///< Angle in radians
     double alpha;      ///< Matsuoka-Nakai constant
     double beta;       ///< Matsuoka-Nakai constant
     double gamma;      ///< Matsuoka-Nakai constant
