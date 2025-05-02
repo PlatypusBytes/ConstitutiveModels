@@ -1,0 +1,3 @@
+LIBRARY linear_elastic_with_vertical_tens_cutoff
+EXPORTS
+    umat @1

@@ -1,1 +1,0 @@
-gfortran -shared -o umat.so UMAT_LinearElasticity.f90

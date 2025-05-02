@@ -1,0 +1,3 @@
+LIBRARY matsuoka_nakai
+EXPORTS
+    umat @1

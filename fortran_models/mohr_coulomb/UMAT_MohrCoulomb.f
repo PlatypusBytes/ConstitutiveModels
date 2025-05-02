@@ -5,7 +5,7 @@
      3 NDI,NSHR,NTENS,NSTATEV,PROPS,NPROPS,COORDS,DROT,PNEWDT,
      4 CELENT,DFGRD0,DFGRD1,NOEL,NPT,LAYER,KSPT,KSTEP,KINC)
 !
-      implicit real(8) (a-h,o-z) 
+      implicit real(8) (a-h,o-z)
 !
       CHARACTER*(*) CMNAME
       DIMENSION STRESS(NTENS),STATEV(NSTATEV),
@@ -49,7 +49,7 @@
 *
         call AbaqusToPlaxisStressOrdering(DSTRAN)
         call AbaqusToPlaxisStressOrdering(STRESS)
-        ipl     =   0 
+        ipl     =   0
         G       =   PROPS(1)       ! G
         ENU     =   PROPS(2)       ! nu
         C       =   PROPS(3)       ! C
@@ -138,9 +138,9 @@
 * ... end UMAT routine
 *
       Return
-      End  
+      End
       subroutine AbaqusToPlaxisStressOrdering(S)
-      implicit real(8) (a-h,o-z) 
+      implicit real(8) (a-h,o-z)
       dimension S(*)
       temp=S(5)
       S(5)=S(6)
@@ -1294,4 +1294,3 @@ C**********************************************************************
 C**********************************************************************
 C End Of file
 C**********************************************************************
-
