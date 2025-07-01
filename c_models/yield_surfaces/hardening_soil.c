@@ -25,7 +25,7 @@ void calculate_dqa_dsigma(double dqadsigma[VOIGTSIZE_3D], const double phi_rad, 
 
 }
 
-void derivative_shear_yield_function(const double q_a, const double q, const double E_50, const double E_ur, const double gamma_ps, double dfdq[VOIGTSIZE_3D])
+void derivative_shear_yield_function(const double q_a, const double q, const double E_50, const double E_ur, const double gamma_ps, double dfds[VOIGTSIZE_3D])
 {
     // derivative of shear yield function
 
@@ -44,7 +44,7 @@ void derivative_shear_yield_function(const double q_a, const double q, const dou
 
     for( int i = 0; i < VOIGTSIZE_3D; ++i)
     {
-        dfdq[i] = dfdq * dqdsigma[i] + dfdqa * dqadsigma[i];
+        dfds[i] = dfdq * dqdsigma[i] + dfdqa * dqadsigma[i];
     }
 
 }
