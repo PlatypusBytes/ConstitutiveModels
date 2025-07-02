@@ -7,6 +7,7 @@ extern const double SMALL_VALUE;  // Define a small value for numerical stabilit
 
 // use #define, so it can be used in preprocessor directives
 #define VOIGTSIZE_3D 6  // Define size of Voigt vector for 3D tensors
+#define VOIGTSIZE_2D_INTERFACE 2  // Define size of Voigt vector for 2D interface tensors
 
 // Define tensor component mapping (Voigt, 0-based)
 extern const int XX;  // X component

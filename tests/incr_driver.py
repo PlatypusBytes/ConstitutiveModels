@@ -3,11 +3,10 @@ import numpy as np
 from tests.utils import Utils
 
 
-VERTICAL_AXIS_INDEX = 1 # [0, 1, 2] = [x, y, z]
 
 class IncrDriver:
     def __init__(self,initial_stress, strain_increment, stress_increment, constitutive_model_info, n_time_steps,
-                 max_iterations, voigt_size=6, ndim=3):
+                 max_iterations, ndim=3, ndi=3, nshr=3, vertical_axis_index=1):
         """
         Initialize the IncrDriver class.
 
@@ -18,8 +17,11 @@ class IncrDriver:
             constitutive_model_info (dict): Information about the constitutive model, including language and file name.
             n_time_steps (int): The number of time steps to solve.
             max_iterations (int): The maximum number of iterations per time step for the solver.
-            voigt_size (int): The size of the Voigt notation for stress/strain vectors. Default is 6 (3D).
             ndim (int): The number of dimensions for the problem. Default is 3 (3D).
+            ndi (int): The number of dimensions in the stress tensor. Default is 3.
+            nshr (int): The number of shear components in the stress tensor. Default is 3.
+            vertical_axis_index (int): The index of the vertical axis in the stress tensor. Default is 1 (y-axis). For
+              interface problems, the vertical axis is the normal axis (0 index).
 
         """
 
@@ -29,8 +31,13 @@ class IncrDriver:
         self.constitutive_model_info = constitutive_model_info
         self.n_time_steps = n_time_steps
         self.max_iterations = max_iterations
-        self.voigt_size = voigt_size
+
         self.ndim = ndim
+        self.ndi = ndi
+        self.nshr = nshr
+        self.vertical_axis_index = vertical_axis_index
+
+        self.voigt_size = self.ndi + self.nshr
 
         self.stresses = []
         self.strains = []
@@ -53,7 +60,7 @@ class IncrDriver:
         """
 
         control_type = np.zeros(self.voigt_size)
-        control_type[VERTICAL_AXIS_INDEX] = 1
+        control_type[self.vertical_axis_index] = 1
 
         self.solve(control_type)
 
@@ -68,7 +75,7 @@ class IncrDriver:
         control_type = np.zeros(self.voigt_size)
 
         control_type[:self.ndim] = 1
-        control_type[VERTICAL_AXIS_INDEX] = 0
+        control_type[self.vertical_axis_index] = 0
 
         self.solve(control_type)
 
@@ -107,7 +114,7 @@ class IncrDriver:
         # run umat in order to retrieve the elastic matrix
         _, ddsdde, _ = runner(self.constitutive_model_info['file_name'], self.initial_stress, np.copy(state_variables),
                               np.zeros(self.voigt_size), np.zeros(self.voigt_size),
-                              self.constitutive_model_info["properties"], 0)
+                              self.constitutive_model_info["properties"], 0, self.ndi, self.nshr)
 
         # initialize stress and strain vectors
         strain_vector = np.zeros(self.voigt_size)
@@ -148,7 +155,8 @@ class IncrDriver:
                 stress_updated, ddsdde, state_variables = runner(self.constitutive_model_info['file_name'],
                                                                  stress_vector, state_variables, strain_vector,
                                                                  delta_strain,
-                                                                 self.constitutive_model_info["properties"], t)
+                                                                 self.constitutive_model_info["properties"], t,
+                                                                 self.ndi, self.nshr)
 
                 # if not at max iterations, update the approximation for delta stress and reset stress vector and state
                 # variables
@@ -187,7 +195,7 @@ class IncrDriver:
         # prevent NANs, if the matrix is singular, fill the diagonal with a small number
         diag_indices = np.diag_indices_from(D)
         small_diagonal = np.abs(D[diag_indices]) < 1e-12
-        D[diag_indices][small_diagonal] = 1e-12  # or use np.finfo(float).eps for machine epsilon
+        D[diag_indices[0][small_diagonal], diag_indices[1][small_diagonal]] = 1e-12
 
         control_type_array = np.array(control_type)
         strain_controlled = control_type_array == 0
