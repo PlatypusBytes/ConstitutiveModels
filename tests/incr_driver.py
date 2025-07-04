@@ -6,7 +6,7 @@ from tests.utils import Utils
 
 class IncrDriver:
     def __init__(self,initial_stress, strain_increment, stress_increment, constitutive_model_info, n_time_steps,
-                 max_iterations, ndim=3, ndi=3, nshr=3, vertical_axis_index=1):
+                 max_iterations, ndim=3, n_direct_stress_components=3, n_shear_components=3, vertical_axis_index=1):
         """
         Initialize the IncrDriver class.
 
@@ -18,8 +18,8 @@ class IncrDriver:
             n_time_steps (int): The number of time steps to solve.
             max_iterations (int): The maximum number of iterations per time step for the solver.
             ndim (int): The number of dimensions for the problem. Default is 3 (3D).
-            ndi (int): The number of dimensions in the stress tensor. Default is 3.
-            nshr (int): The number of shear components in the stress tensor. Default is 3.
+            n_direct_stress_components (int): Number of direct stress components in the stress vector. Default is 3.
+            n_shear_components (int): The number of shear components in the stress vector. Default is 3.
             vertical_axis_index (int): The index of the vertical axis in the stress tensor. Default is 1 (y-axis). For
               interface problems, the vertical axis is the normal axis (0 index).
 
@@ -33,11 +33,11 @@ class IncrDriver:
         self.max_iterations = max_iterations
 
         self.ndim = ndim
-        self.ndi = ndi
-        self.nshr = nshr
+        self.n_direct_stress_components = n_direct_stress_components
+        self.n_shear_components = n_shear_components
         self.vertical_axis_index = vertical_axis_index
 
-        self.voigt_size = self.ndi + self.nshr
+        self.voigt_size = self.n_direct_stress_components + self.n_shear_components
 
         self.stresses = []
         self.strains = []
@@ -114,7 +114,8 @@ class IncrDriver:
         # run umat in order to retrieve the elastic matrix
         _, ddsdde, _ = runner(self.constitutive_model_info['file_name'], self.initial_stress, np.copy(state_variables),
                               np.zeros(self.voigt_size), np.zeros(self.voigt_size),
-                              self.constitutive_model_info["properties"], 0, self.ndi, self.nshr)
+                              self.constitutive_model_info["properties"], 0, self.n_direct_stress_components,
+                              self.n_shear_components)
 
         # initialize stress and strain vectors
         strain_vector = np.zeros(self.voigt_size)
@@ -156,7 +157,8 @@ class IncrDriver:
                                                                  stress_vector, state_variables, strain_vector,
                                                                  delta_strain,
                                                                  self.constitutive_model_info["properties"], t,
-                                                                 self.ndi, self.nshr)
+                                                                 self.n_direct_stress_components,
+                                                                 self.n_shear_components)
 
                 # if not at max iterations, update the approximation for delta stress and reset stress vector and state
                 # variables

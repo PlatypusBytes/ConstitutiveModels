@@ -16,7 +16,8 @@ void calculate_elastic_stiffness_matrix_3d(double E, double nu,
 
 /**
  * @brief Function to calculate the elastic stiffness matrix for 2D interface materials using
- * Hooke's law.
+ * Hooke's law. For 2D interface elements, the stiffness matrix is 2x2. With one component in the
+ * normal direction and one in the shear direction.
  *
  * @param[in]  E Young's modulus of the material.
  * @param[in]  nu Poisson's ratio of the material.

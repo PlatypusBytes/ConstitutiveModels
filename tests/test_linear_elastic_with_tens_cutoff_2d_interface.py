@@ -7,7 +7,7 @@ from tests.incr_driver import IncrDriver
 
 def test_strain_controlled_compression_oedometer():
     """
-    Test the strain controlled compression oedometer  with a tensile cutoff in the vertical direction. Where the sample
+    Test the strain controlled compression oedometer  with a tensile cutoff in the vertical direction. The sample
     is compressed, thus the tensile cutoff is not active, the result should be the same as the linear elastic case.
 
     :return:
@@ -53,7 +53,8 @@ def test_strain_controlled_compression_oedometer():
                              stress_increment,
                              const_model_info,
                              3,
-                             5, ndim=2, ndi=1, nshr=1,vertical_axis_index=0)
+                             5, ndim=2, n_direct_stress_components=1, n_shear_components=1,
+                             vertical_axis_index=0)
 
     incr_driver.solve_oedometer_strain_controlled()
 
@@ -71,17 +72,16 @@ def test_strain_controlled_compression_oedometer():
     np.testing.assert_allclose(incr_driver.stresses, expected_stresses, rtol=1e-6)
 
 
-def test_stress_controlled():
+def test_stress_controlled_extension_below_cutoff():
     """
-    Test a stress controlled test with a tensile cutoff in the vertical direction. Where the sample is
-    compressed in vertical direction, thus the tensile cutoff is not active, the result should be the same as the
-    linear elastic case.
+    Test a stress controlled test with a tensile cutoff in the vertical direction. The sample is extended, but less than
+    the tensile cutoff, thus the tensile cutoff is not active, the result should be the same as the linear elastic case.
 
     :return:
     """
 
     E = 30000000
-    nu = 00.0
+    nu = 0.0
 
     M = E * (1-nu)/((1+nu)*(1-2*nu)) # P wave modulus
     G = E / (2 * (1 + nu))
@@ -117,7 +117,8 @@ def test_stress_controlled():
                              stress_increment,
                              const_model_info,
                              3,
-                             5, ndim=2, ndi=1, nshr=1)
+                             5, ndim=2, n_direct_stress_components=1, n_shear_components=1,
+                             vertical_axis_index=0)
 
     incr_driver.solve([1,1])
 
@@ -136,7 +137,7 @@ def test_stress_controlled():
 
 def test_strain_controlled_tension_oedometer():
     """
-    Test the strain controlled oedometer test with a tensile cutoff in the vertical direction. Where enough tension is
+    Test the strain controlled oedometer test with a tensile cutoff in the vertical direction. Enough tension is
     applied such that the tensile cutoff is active.
 
     :return:
@@ -181,7 +182,8 @@ def test_strain_controlled_tension_oedometer():
                              stress_increment,
                              const_model_info,
                              3,
-                             5, ndim=2, ndi=1, nshr=1)
+                             5, ndim=2, n_direct_stress_components=1, n_shear_components=1,
+                             vertical_axis_index=0)
 
     incr_driver.solve_oedometer_strain_controlled()
 

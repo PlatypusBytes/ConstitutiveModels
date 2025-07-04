@@ -39,8 +39,8 @@ void calculate_elastic_stiffness_matrix_3d(double E, double nu,
 void calculate_elastic_stiffness_matrix_2d_interface(double E, double nu,
                                            double elastic_matrix[VOIGTSIZE_2D_INTERFACE * VOIGTSIZE_2D_INTERFACE])
 {
-    double G = E / (2.0 * (1.0 + nu));                         // Shear modulus
     double M =  E * (1 - nu) / ((1.0 + nu) * (1.0 - 2.0 * nu)); // P wave modulus
+    double G = E / (2.0 * (1.0 + nu));                         // Shear modulus
 
     // Initialize to zero
     for (int i = 0; i < VOIGTSIZE_2D_INTERFACE * VOIGTSIZE_2D_INTERFACE; ++i)
