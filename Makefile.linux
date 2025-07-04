@@ -61,7 +61,7 @@ $(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff.o: $(LINEAR_ELASTIC_TENS_D
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # Linear elastic with vertical tension cutoff model for 2d interface
-$(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface.o: $(LINEAR_ELASTIC_TENS_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface.c
+$(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface.o: $(LINEAR_ELASTIC_TENS_2D_INTERFACE_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # Matsuoka-Nakai model
