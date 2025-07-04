@@ -99,8 +99,6 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     (void)RPL;
     (void)SCD;
 
-    fprintf(stderr, "UMAT called for element %d at integration point %d.\n");
-
     // Check Inputs
     if (*NTENS != VOIGTSIZE_2D_INTERFACE || *NDI != 1 || *NSHR != 1)
     {
