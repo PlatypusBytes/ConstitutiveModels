@@ -23,7 +23,7 @@ def test_strain_controlled_compression_oedometer():
     state_vars={'is_plastic': 0}
 
     # Define the original stress vector
-    orig_stress_vector = np.array([0, -1])
+    orig_stress_vector = np.array([-1, 0])
 
     project_dir = os.getcwd()
     # check operating system
@@ -44,7 +44,7 @@ def test_strain_controlled_compression_oedometer():
 
     vertical_strain_increment = -1e-4
 
-    strain_increment = np.array([0, vertical_strain_increment])
+    strain_increment = np.array([vertical_strain_increment, 0])
     stress_increment = np.zeros_like(strain_increment)
 
     # solve the problem
@@ -57,14 +57,14 @@ def test_strain_controlled_compression_oedometer():
 
     incr_driver.solve_oedometer_strain_controlled()
 
-    expected_strains = np.array([[ 0, vertical_strain_increment],
-                                    [ 0, 2*vertical_strain_increment],
-                                    [ 0, 3*vertical_strain_increment]])
+    expected_strains = np.array([[vertical_strain_increment, 0],
+                                    [2*vertical_strain_increment, 0],
+                                    [3*vertical_strain_increment, 0]])
 
     expected_stresses = np.array([orig_stress_vector,orig_stress_vector,orig_stress_vector], dtype=float)
-    expected_stresses[0,1] = expected_stresses[0,1]+ vertical_strain_increment * M
-    expected_stresses[1,1] = expected_stresses[1,1] + vertical_strain_increment * M * 2
-    expected_stresses[2,1] = expected_stresses[2,1] + vertical_strain_increment * M * 3
+    expected_stresses[0,0] = expected_stresses[0,0]+ vertical_strain_increment * M
+    expected_stresses[1,0] = expected_stresses[1,0] + vertical_strain_increment * M * 2
+    expected_stresses[2,0] = expected_stresses[2,0] + vertical_strain_increment * M * 3
 
     # Check the results
     np.testing.assert_allclose(incr_driver.strains, expected_strains, rtol=1e-6)
@@ -153,7 +153,7 @@ def test_strain_controlled_tension_oedometer():
     state_vars={'is_plastic': 0}
 
     # Define the original stress vector
-    orig_stress_vector = np.array([0, -1.0])
+    orig_stress_vector = np.array([-1.0, 0.0])
 
     project_dir = os.getcwd()
     # check operating system
@@ -172,7 +172,7 @@ def test_strain_controlled_tension_oedometer():
 
     # strain increment per time step in the form of [eps_x, eps_y, eps_z, gamma_xy, gamma_xz, gamma_yz]
     vertical_strain_increment = 1e-4
-    strain_increment = np.array([0, vertical_strain_increment])
+    strain_increment = np.array([vertical_strain_increment, 0.0])
     stress_increment = np.zeros_like(strain_increment)
 
     # solve the problem
@@ -185,14 +185,14 @@ def test_strain_controlled_tension_oedometer():
 
     incr_driver.solve_oedometer_strain_controlled()
 
-    expected_strains = np.array([[0.0, vertical_strain_increment],
-                                    [0.0, 2*vertical_strain_increment],
-                                    [0.0, 3*vertical_strain_increment]])
+    expected_strains = np.array([[vertical_strain_increment, 0.0],
+                                    [2*vertical_strain_increment, 0.0],
+                                    [3*vertical_strain_increment, 0.0]])
 
     expected_stresses = np.array([orig_stress_vector,orig_stress_vector,orig_stress_vector], dtype=float)
-    expected_stresses[0,1] = expected_stresses[0,1]+ vertical_strain_increment * M
-    expected_stresses[1,1] = expected_stresses[1,1] + vertical_strain_increment * M * 2
-    expected_stresses[2,1] = tensile_cutoff
+    expected_stresses[0,0] = expected_stresses[0,0]+ vertical_strain_increment * M
+    expected_stresses[1,0] = expected_stresses[1,0] + vertical_strain_increment * M * 2
+    expected_stresses[2,0] = tensile_cutoff
 
     # Check the results
     np.testing.assert_allclose(incr_driver.strains, expected_strains, rtol=1e-6)
