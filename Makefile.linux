@@ -60,8 +60,8 @@ $(BUILD_DIR)/matsuoka_nakai_surface.o: $(YIELD_SURFACES_DIR)/matsuoka_nakai_surf
 $(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff.o: $(LINEAR_ELASTIC_TENS_DIR)/linear_elastic_with_vertical_tens_cutoff.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-# Linear elastic with vertical tension cutoff model
-$(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface$.o: $(LINEAR_ELASTIC_TENS_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface$.c
+# Linear elastic with vertical tension cutoff model for 2d interface
+$(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface.o: $(LINEAR_ELASTIC_TENS_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # Matsuoka-Nakai model
@@ -72,7 +72,7 @@ $(BUILD_DIR)/matsuoka_nakai.o: $(MATSUOKA_NAKAI_DIR)/matsuoka_nakai.c
 $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff.so: $(COMMON_OBJS) $(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff.o
 	$(CC) $(LDFLAGS) -o $@ $^
 
-$(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface$.so: $(COMMON_OBJS) $(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface$.o
+$(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface.so: $(COMMON_OBJS) $(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface.o
 	$(CC) $(LDFLAGS) -o $@ $^
 
 $(LIB_DIR)/matsuoka_nakai.so: $(COMMON_OBJS) $(BUILD_DIR)/matsuoka_nakai_surface.o $(BUILD_DIR)/matsuoka_nakai.o
