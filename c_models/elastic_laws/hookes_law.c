@@ -54,3 +54,23 @@ void calculate_elastic_stiffness_matrix_2d_interface(double E, double nu,
     elastic_matrix[1 * VOIGTSIZE_2D_INTERFACE + 1] = G;  // (row 1, col 1)
 
 }
+
+void calculate_elastic_stiffness_matrix_3d_interface(double E, double nu,
+                                           double elastic_matrix[VOIGTSIZE_3D_INTERFACE * VOIGTSIZE_3D_INTERFACE])
+{
+    double M =  E * (1 - nu) / ((1.0 + nu) * (1.0 - 2.0 * nu)); // P wave modulus
+    double G = E / (2.0 * (1.0 + nu));                         // Shear modulus
+
+    // Initialize to zero
+    for (int i = 0; i < VOIGTSIZE_3D_INTERFACE * VOIGTSIZE_3D_INTERFACE; ++i)
+    {
+        elastic_matrix[i] = 0.0;
+    }
+
+    // Populate using row-major indexing: elastic_matrix[row * VOIGTSIZE_3D_INTERFACE + col]
+    // Normal Stresses
+    elastic_matrix[0 * VOIGTSIZE_3D_INTERFACE + 0] = M;  // (row 0, col 0)
+    elastic_matrix[1 * VOIGTSIZE_3D_INTERFACE + 1] = G;  // (row 1, col 1)
+    elastic_matrix[2 * VOIGTSIZE_3D_INTERFACE + 2] = G;  // (row 2, col 2)
+
+}
