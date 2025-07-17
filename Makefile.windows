@@ -52,10 +52,10 @@ COMMON_OBJS = \
 
 # Target shared libraries
 LIBS = \
-	$(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff$(SO_EXT) \
-	$(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff_2d_interface$(SO_EXT) \
+    $(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff$(SO_EXT) \
+    $(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff_2d_interface$(SO_EXT) \
     $(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff_3d_interface$(SO_EXT) \
-	$(LIB_DIR)\matsuoka_nakai$(SO_EXT)
+    $(LIB_DIR)\matsuoka_nakai$(SO_EXT)
 
 # --- Targets ---
 

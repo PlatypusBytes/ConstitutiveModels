@@ -28,10 +28,10 @@ COMMON_OBJS = \
 
 # Target shared libraries
 LIBS = \
-	$(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff.so \
-	$(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface.so \
+    $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff.so \
+    $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface.so \
     $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff_3d_interface.so \
-	$(LIB_DIR)/matsuoka_nakai.so
+    $(LIB_DIR)/matsuoka_nakai.so
 
 # Default target
 all: directories $(LIBS)
