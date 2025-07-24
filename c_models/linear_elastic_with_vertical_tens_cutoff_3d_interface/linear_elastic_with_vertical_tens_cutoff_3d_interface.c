@@ -172,7 +172,6 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 
         // set stiffness matrix terms to a small value for numerical stability
         // DDSDDE = DDSDDE_elastic * small_value
-
         vector_scalar_multiply(DDSDDE_elastic, SMALL_VALUE, VOIGTSIZE_3D_INTERFACE * VOIGTSIZE_3D_INTERFACE, DDSDDE);
 
         STATEV[0] = 1.0;  // Indicate cutoff state
