@@ -100,10 +100,10 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     (void)SCD;
 
     // Check Inputs
-    if (*NTENS != VOIGTSIZE_2D_INTERFACE || *NDI != 1 || *NSHR != 1)
+    if (*NTENS != VOIGTSIZE_3D_INTERFACE || *NDI != 1 || *NSHR != 2)
     {
-        // Handle error - This UMAT is specifically for 2D interface elements
-        fprintf(stderr, "UMAT Error: NTENS != 2. This UMAT requires 2D interface elements.\n");
+        // Handle error - This UMAT is specifically for 3D interface elements
+        fprintf(stderr, "UMAT Error: NTENS != 3. This UMAT requires 3D interface elements.\n");
         // exit(1); // Avoid exiting in production code if possible
         return;  // Or try to handle gracefully
     }
@@ -125,23 +125,23 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     double nu = PROPS[1];                 // Poisson's Ratio
     double tension_threshold = PROPS[2];  // Tensile strength threshold in Y
 
-    double DDSDDE_elastic[VOIGTSIZE_2D_INTERFACE * VOIGTSIZE_2D_INTERFACE];
-    double delta_stress[VOIGTSIZE_2D_INTERFACE];
-    double stress_trial[VOIGTSIZE_2D_INTERFACE];
-    double elastic_delta_strain_vector[VOIGTSIZE_2D_INTERFACE];
+    double DDSDDE_elastic[VOIGTSIZE_3D_INTERFACE * VOIGTSIZE_3D_INTERFACE];
+    double delta_stress[VOIGTSIZE_3D_INTERFACE];
+    double stress_trial[VOIGTSIZE_3D_INTERFACE];
+    double elastic_delta_strain_vector[VOIGTSIZE_3D_INTERFACE];
 
     int normal_axis_index = 0;
 
     // Calculate Elastic Stiffness Matrix (DDSDDE_elastic)
-    calculate_elastic_stiffness_matrix_2d_interface(E, nu, DDSDDE_elastic);
+    calculate_elastic_stiffness_matrix_3d_interface(E, nu, DDSDDE_elastic);
 
     // Calculate Elastic Trial Stress
     // delta_stress = D * DSTRAN
-    matrix_vector_multiply(DDSDDE_elastic, DSTRAN, VOIGTSIZE_2D_INTERFACE, delta_stress);
+    matrix_vector_multiply(DDSDDE_elastic, DSTRAN, VOIGTSIZE_3D_INTERFACE, delta_stress);
 
 
     // stress_trial = STRESS + delta_stress
-    add_vectors(STRESS, delta_stress, VOIGTSIZE_2D_INTERFACE, stress_trial);
+    add_vectors(STRESS, delta_stress, VOIGTSIZE_3D_INTERFACE, stress_trial);
 
     // Apply Tension Cutoff Logic
     // Check normal stress component
@@ -151,19 +151,19 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     {
         // elastic normal stiffness
         const double elastic_normal_stiffness =
-            DDSDDE_elastic[normal_axis_index * VOIGTSIZE_2D_INTERFACE + normal_axis_index];
+            DDSDDE_elastic[normal_axis_index * VOIGTSIZE_3D_INTERFACE + normal_axis_index];
 
         // calculate elastic and plastic strains
         const double dEps_el = (tension_threshold - STRESS[normal_axis_index]) / elastic_normal_stiffness;
         const double dEps_pl = DSTRAN[normal_axis_index] - dEps_el;
 
         // Copy the trial stress to the output stress
-        copy_array(DSTRAN, VOIGTSIZE_2D_INTERFACE, elastic_delta_strain_vector);
+        copy_array(DSTRAN, VOIGTSIZE_3D_INTERFACE, elastic_delta_strain_vector);
         elastic_delta_strain_vector[normal_axis_index] = dEps_el;
 
         // calculate elastic and plastic strain energy
         *SSE += vector_dot_product(STRESS, elastic_delta_strain_vector,
-                                   VOIGTSIZE_2D_INTERFACE);  // Specific elastic strain energy
+                                   VOIGTSIZE_3D_INTERFACE);  // Specific elastic strain energy
         *SPD += tension_threshold * dEps_pl;       // Specific plastic strain dissipation
 
         //  Update Stress, Jacobian, and State Variables
@@ -172,7 +172,7 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 
         // set stiffness matrix terms to a small value for numerical stability
         // DDSDDE = DDSDDE_elastic * small_value
-        vector_scalar_multiply(DDSDDE_elastic, SMALL_VALUE, VOIGTSIZE_2D_INTERFACE * VOIGTSIZE_2D_INTERFACE, DDSDDE);
+        vector_scalar_multiply(DDSDDE_elastic, SMALL_VALUE, VOIGTSIZE_3D_INTERFACE * VOIGTSIZE_3D_INTERFACE, DDSDDE);
 
         STATEV[0] = 1.0;  // Indicate cutoff state
     }
@@ -181,12 +181,12 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         // Elastic behavior: Use the trial stress and elastic Jacobian
 
         // Copy the trial stress to the output stress
-        copy_array(stress_trial, VOIGTSIZE_2D_INTERFACE, STRESS);
+        copy_array(stress_trial, VOIGTSIZE_3D_INTERFACE, STRESS);
 
         // Copy the elastic stiffness matrix to the output Jacobian
-        copy_array(DDSDDE_elastic, VOIGTSIZE_2D_INTERFACE * VOIGTSIZE_2D_INTERFACE, DDSDDE);
+        copy_array(DDSDDE_elastic, VOIGTSIZE_3D_INTERFACE * VOIGTSIZE_3D_INTERFACE, DDSDDE);
 
-        *SSE += vector_dot_product(STRESS, DSTRAN, VOIGTSIZE_2D_INTERFACE);  // Specific elastic strain energy
+        *SSE += vector_dot_product(STRESS, DSTRAN, VOIGTSIZE_3D_INTERFACE);  // Specific elastic strain energy
 
         STATEV[0] = 0.0;  // Indicate elastic state
     }
