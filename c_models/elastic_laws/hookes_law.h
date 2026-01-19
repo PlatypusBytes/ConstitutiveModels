@@ -35,5 +35,5 @@ void calculate_elastic_stiffness_matrix_2d_interface(double E, double nu,
  * @param[in]  nu Poisson's ratio of the material.
  * @param[out] elastic_matrix Pointer to the output stiffness matrix (3x3) in row-major order.
  */
-void calculate_elastic_stiffness_matrix_2d_interface(double E, double nu,
+void calculate_elastic_stiffness_matrix_3d_interface(double E, double nu,
                                            double elastic_matrix[VOIGTSIZE_3D_INTERFACE * VOIGTSIZE_3D_INTERFACE]);
