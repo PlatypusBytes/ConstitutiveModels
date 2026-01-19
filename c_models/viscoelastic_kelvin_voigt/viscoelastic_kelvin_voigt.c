@@ -3,7 +3,6 @@
 #include <stdlib.h>  // For exit()
 
 #include "../elastic_laws/hookes_law.h"
-#include "../viscoelastic_laws/viscoelastic_kelvin_voigt.h"
 #include "../globals.h"
 #include "../utils.h"
 
@@ -73,7 +72,11 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 )
 {
     // Avoid unused variable warnings
-    (void)KINC;
+    (void)STATEV;
+    (void)SPD;
+    (void)STRAN;
+    (void)NSTATV;
+    (void) KINC;
     (void)KSTEP;
     (void)KSPT;
     (void)LAYER;
@@ -124,7 +127,7 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     double delta_elastic_stress[VOIGTSIZE_3D];
     double delta_viscous_stress[VOIGTSIZE_3D];
     double updated_stress[VOIGTSIZE_3D];
-    double elastic_delta_strain_vector[VOIGTSIZE_3D];
+    // double elastic_delta_strain_vector[VOIGTSIZE_3D];
 
     // Calculate Elastic Stiffness Matrix (DDSDDE_elastic)
     calculate_elastic_stiffness_matrix_3d(E, nu, DDSDDE_elastic);

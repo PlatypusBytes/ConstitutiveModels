@@ -14,10 +14,11 @@ LINEAR_ELASTIC_TENS_DIR = $(C_MODELS_DIR)/linear_elastic_with_vertical_tens_cuto
 LINEAR_ELASTIC_TENS_2D_INTERFACE_DIR = $(C_MODELS_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface
 LINEAR_ELASTIC_TENS_3D_INTERFACE_DIR = $(C_MODELS_DIR)/linear_elastic_with_vertical_tens_cutoff_3d_interface
 MATSUOKA_NAKAI_DIR = $(C_MODELS_DIR)/matsuoka_nakai
+VISCOELASTIC_KELVIN_VOIGT_DIR = $(C_MODELS_DIR)/viscoelastic_kelvin_voigt
 YIELD_SURFACES_DIR = $(C_MODELS_DIR)/yield_surfaces
 
 # Include directories
-INCLUDES = -I$(C_MODELS_DIR) -I$(ELASTIC_LAWS_DIR) -I$(YIELD_SURFACES_DIR)
+INCLUDES = -I$(C_MODELS_DIR) -I$(ELASTIC_LAWS_DIR) -I$(VISCOELASTIC_LAWS_DIR) -I$(YIELD_SURFACES_DIR)
 
 # Common object files
 COMMON_OBJS = \
@@ -31,7 +32,8 @@ LIBS = \
     $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff.so \
     $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface.so \
     $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff_3d_interface.so \
-    $(LIB_DIR)/matsuoka_nakai.so
+    $(LIB_DIR)/matsuoka_nakai.so \
+    $(LIB_DIR)/viscoelastic_kelvin_voigt.so
 
 # Default target
 all: directories $(LIBS)
@@ -74,6 +76,10 @@ $(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff_3d_interface.o: $(LINEAR_E
 $(BUILD_DIR)/matsuoka_nakai.o: $(MATSUOKA_NAKAI_DIR)/matsuoka_nakai.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
+# Viscoelastic Kelvin-Voigt model
+$(BUILD_DIR)/viscoelastic_kelvin_voigt.o: $(VISCOELASTIC_KELVIN_VOIGT_DIR)/viscoelastic_kelvin_voigt.c
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
 # Shared libraries
 $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff.so: $(COMMON_OBJS) $(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff.o
 	$(CC) $(LDFLAGS) -o $@ $^
@@ -85,6 +91,9 @@ $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff_3d_interface.so: $(COMMON_OB
 	$(CC) $(LDFLAGS) -o $@ $^
 
 $(LIB_DIR)/matsuoka_nakai.so: $(COMMON_OBJS) $(BUILD_DIR)/matsuoka_nakai_surface.o $(BUILD_DIR)/matsuoka_nakai.o
+	$(CC) $(LDFLAGS) -o $@ $^
+
+$(LIB_DIR)/viscoelastic_kelvin_voigt.so: $(COMMON_OBJS) $(BUILD_DIR)/viscoelastic_kelvin_voigt.o
 	$(CC) $(LDFLAGS) -o $@ $^
 
 # Clean target
