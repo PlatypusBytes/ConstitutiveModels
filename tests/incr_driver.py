@@ -126,8 +126,14 @@ class IncrDriver:
 
         # loop over time steps
         for t in range(self.n_time_steps):
+            # check if strain is a list of lists (multiple increments per time step -> cyclic testing)
+            if self.strain_increment.ndim > 1:
+                delta_strain = np.copy(self.strain_increment[t])
+                stress_inc = self.stress_increment[t]
+            else:
+                delta_strain = np.copy(self.strain_increment)
+                stress_inc = self.stress_increment
 
-            delta_strain = np.copy(self.strain_increment)
             correction_delta_strain = np.zeros(self.voigt_size)
             approx_delta_stress = np.zeros(self.voigt_size)
 
@@ -141,7 +147,7 @@ class IncrDriver:
             for i in range(self.max_iterations + 1):
 
                 # get stress increment at stress controlled components, else zero
-                stress_increment = np.where(control_type, self.stress_increment, 0.0)
+                stress_increment = np.where(control_type, stress_inc, 0.0)
 
                 # calculate the undesired stress
                 u_d_stress = stress_increment + approx_delta_stress
