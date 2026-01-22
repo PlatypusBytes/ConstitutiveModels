@@ -138,7 +138,6 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     double elastic_stress_increment[VOIGTSIZE_3D];
     double new_elastic_stress[VOIGTSIZE_3D];
     double viscous_stress_increment[VOIGTSIZE_3D];
-    double delta_sigma[VOIGTSIZE_3D];
     double elastic_stress_old[VOIGTSIZE_3D];
 
     // Retrieve old elastic stress from STATEV
