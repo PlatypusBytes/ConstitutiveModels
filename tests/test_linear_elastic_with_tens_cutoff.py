@@ -51,6 +51,7 @@ def test_strain_controlled_compression_triaxial():
                              stress_increment,
                              const_model_info,
                              3,
+                             1,
                              5)
 
     incr_driver.solve_triaxial_strain_controlled()

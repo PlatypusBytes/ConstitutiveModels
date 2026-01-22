@@ -5,7 +5,7 @@ from tests.utils import Utils
 
 
 class IncrDriver:
-    def __init__(self,initial_stress, strain_increment, stress_increment, constitutive_model_info, n_time_steps,
+    def __init__(self,initial_stress, strain_increment, stress_increment, constitutive_model_info, n_time_steps, t_step,
                  max_iterations, ndim=3, n_direct_stress_components=3, n_shear_components=3, vertical_axis_index=1):
         """
         Initialize the IncrDriver class.
@@ -30,6 +30,7 @@ class IncrDriver:
         self.stress_increment = stress_increment
         self.constitutive_model_info = constitutive_model_info
         self.n_time_steps = n_time_steps
+        self.t_step = t_step
         self.max_iterations = max_iterations
 
         self.ndim = ndim
@@ -114,7 +115,7 @@ class IncrDriver:
         # run umat in order to retrieve the elastic matrix
         _, ddsdde, _ = runner(self.constitutive_model_info['file_name'], self.initial_stress, np.copy(state_variables),
                               np.zeros(self.voigt_size), np.zeros(self.voigt_size),
-                              self.constitutive_model_info["properties"], 0, self.n_direct_stress_components,
+                              self.constitutive_model_info["properties"], self.t_step, self.n_direct_stress_components,
                               self.n_shear_components)
 
         # initialize stress and strain vectors
@@ -162,7 +163,8 @@ class IncrDriver:
                 stress_updated, ddsdde, state_variables = runner(self.constitutive_model_info['file_name'],
                                                                  stress_vector, state_variables, strain_vector,
                                                                  delta_strain,
-                                                                 self.constitutive_model_info["properties"], t,
+                                                                 self.constitutive_model_info["properties"],
+                                                                 self.t_step,
                                                                  self.n_direct_stress_components,
                                                                  self.n_shear_components)
 

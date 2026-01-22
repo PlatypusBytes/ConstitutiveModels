@@ -305,7 +305,7 @@ class Utils:
         c_dstrain = ffi.new("double[]", dstrain)
 
         c_time = ffi.new("double[]", [0.0, 0.0])  # [step time, total time]
-        c_dtime = ffi.new("double*", 1.0)
+        c_dtime = ffi.new("double*", time_step)
 
         # Material name (80 characters)
         c_cmname = ffi.new("char[]", b"MY_MATERIAL" + b" " * (80 - len(b"MY_MATERIAL")))
@@ -327,7 +327,7 @@ class Utils:
         c_npt = ffi.new("int*", 1)
         c_layer = ffi.new("int*", 1)
         c_kspt = ffi.new("int*", 1)
-        c_kstep = ffi.new("int*", time_step)
+        c_kstep = ffi.new("int*", 1)
         c_kinc = ffi.new("int*", 1)
 
         # Call UMAT function without temperature and predefined field variables
