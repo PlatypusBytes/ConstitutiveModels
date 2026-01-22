@@ -29,6 +29,14 @@ int check_properties(const int NPROPS, const double* PROPS);
 // Define the UMAT function signature expected by the FEA software.
 //       Check your specific FEA software documentation for exact C interface requirements if
 //       available. Some systems might require all arguments to be pointers, even scalars.
+//
+// This is the implementation for the Kelvin-Voigt viscoelastic model for 3D problems.
+// The model is formulated in total stress and total strain, with viscous effects
+// incorporated via strain rate dependence.
+// Kelvin-Voigt model: σ = E·ε + η·(dε/dt)
+//
+// State Variables (STATEV):
+//   STATEV[0-5]: Elastic stress components (σ_xx, σ_yy, σ_zz, σ_xy, σ_xz, σ_yz)
 UMAT_EXPORT void UMAT_CALLCONV umat(
     // Outputs
     double* STRESS,  // Stress tensor at end of increment (NTENS components)
@@ -72,7 +80,6 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 )
 {
     // Avoid unused variable warnings
-    (void)STATEV;
     (void)STRAN;
     (void)NSTATV;
     (void) KINC;
@@ -115,33 +122,47 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         return;
     }
 
+    if (*NSTATV != 6)
+    {
+        fprintf(stderr, "UMAT Error: NSTATV != 6. Requires exactly 6 state variables,\n"
+            "             corresponding to the elastic stress components.\n");
+        return;
+    }
+
     // Material Properties
-    // PROPS[0] and PROPS[1] are E and nu (elastic)
-    // PROPS[2] is eta (viscous)
     const double E = PROPS[0];     // Elastic Young's Modulus
     const double nu = PROPS[1];    // Poisson's Ratio
-    const double eta = PROPS[2];  // Viscosity coefficient
+    const double eta = PROPS[2];   // Viscosity coefficient
 
     double DDSDDE_elastic[VOIGTSIZE_3D * VOIGTSIZE_3D];
-    double elastic_stress[VOIGTSIZE_3D];
-    double viscous_stress[VOIGTSIZE_3D];
-    double strain_end[VOIGTSIZE_3D];
+    double elastic_stress_increment[VOIGTSIZE_3D];
+    double new_elastic_stress[VOIGTSIZE_3D];
+    double viscous_stress_increment[VOIGTSIZE_3D];
+    double delta_sigma[VOIGTSIZE_3D];
+    double elastic_stress_old[VOIGTSIZE_3D];
+
+    // Retrieve old elastic stress from STATEV
+    for (int i=0; i<VOIGTSIZE_3D; i++) {
+        elastic_stress_old[i] = STATEV[i];
+    }
 
     // Calculate Elastic Stiffness Matrix (DDSDDE_elastic)
     calculate_elastic_stiffness_matrix_3d(E, nu, DDSDDE_elastic);
 
-    // Calculate total strain at the end of the increment
-    add_vectors(STRAN, DSTRAN, VOIGTSIZE_3D, strain_end);
+    // Calculate Elastic Stress Increment
+    // elastic_stress_increment = D * DSTRAN
+    matrix_vector_multiply(DDSDDE_elastic, DSTRAN, VOIGTSIZE_3D, elastic_stress_increment);
 
-    // Calculate Elastic Stress
-    // stress = D * (DSTRAN + STRAN)
-    matrix_vector_multiply(DDSDDE_elastic, strain_end, VOIGTSIZE_3D, elastic_stress);
+    // Calculate the New Elastic Stress
+    // new_elastic_stress = elastic_stress_old + (D * DSTRAN)
+    add_vectors(elastic_stress_old, elastic_stress_increment, VOIGTSIZE_3D, new_elastic_stress);
 
-    // Viscous Stress Update (Kelvin-Voigt Model)
-    vector_scalar_multiply(DSTRAN, eta / (*DTIME), VOIGTSIZE_3D, viscous_stress);
+    // Calculate Viscous Stress Increment
+    // viscous_stress_increment = eta / DTIME * DSTRAN
+    vector_scalar_multiply(DSTRAN, eta / (*DTIME), VOIGTSIZE_3D, viscous_stress_increment);
 
-    // Total Stress Update
-    add_vectors(elastic_stress, viscous_stress, VOIGTSIZE_3D, STRESS);
+    // Total Stress
+    add_vectors(new_elastic_stress, viscous_stress_increment, VOIGTSIZE_3D, STRESS);
 
     // Consistent tangent: DDSDDE_elastic + eta/DTIME * I
     copy_array(DDSDDE_elastic, VOIGTSIZE_3D * VOIGTSIZE_3D, DDSDDE);
@@ -150,9 +171,12 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         DDSDDE[i * VOIGTSIZE_3D + i] += eta / (*DTIME);
     }
 
+    // update STATEV with New Elastic Stress
+    copy_array(new_elastic_stress, VOIGTSIZE_3D, STATEV);
+
     // Energy Calculations
-    *SSE += vector_dot_product(elastic_stress, DSTRAN, VOIGTSIZE_3D);
-    *SPD += vector_dot_product(viscous_stress, DSTRAN, VOIGTSIZE_3D);
+    *SSE += vector_dot_product(elastic_stress_increment, DSTRAN, VOIGTSIZE_3D);
+    *SPD += vector_dot_product(viscous_stress_increment, DSTRAN, VOIGTSIZE_3D);
 
     return;
 }
