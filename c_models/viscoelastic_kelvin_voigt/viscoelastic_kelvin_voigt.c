@@ -73,7 +73,6 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 {
     // Avoid unused variable warnings
     (void)STATEV;
-    (void)SPD;
     (void)STRAN;
     (void)NSTATV;
     (void) KINC;
@@ -118,40 +117,42 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 
     // Material Properties
     // PROPS[0] and PROPS[1] are E and nu (elastic)
-    // PROPS[2] and PROPS[3] are Ev and nu_v (viscous)
+    // PROPS[2] is eta (viscous)
     const double E = PROPS[0];     // Elastic Young's Modulus
     const double nu = PROPS[1];    // Poisson's Ratio
-    const double eta = PROPS[2];    // Viscosity coefficent (porportional to the strain rate)
+    const double eta = PROPS[2];  // Viscosity coefficient
 
     double DDSDDE_elastic[VOIGTSIZE_3D * VOIGTSIZE_3D];
-    double delta_elastic_stress[VOIGTSIZE_3D];
-    double delta_viscous_stress[VOIGTSIZE_3D];
-    double updated_stress[VOIGTSIZE_3D];
-    // double elastic_delta_strain_vector[VOIGTSIZE_3D];
+    double elastic_stress[VOIGTSIZE_3D];
+    double viscous_stress[VOIGTSIZE_3D];
+    double strain_end[VOIGTSIZE_3D];
 
     // Calculate Elastic Stiffness Matrix (DDSDDE_elastic)
     calculate_elastic_stiffness_matrix_3d(E, nu, DDSDDE_elastic);
 
+    // Calculate total strain at the end of the increment
+    add_vectors(STRAN, DSTRAN, VOIGTSIZE_3D, strain_end);
+
     // Calculate Elastic Stress
-    // delta_stress = D * DSTRAN
-    matrix_vector_multiply(DDSDDE_elastic, DSTRAN, VOIGTSIZE_3D, delta_elastic_stress);
+    // stress = D * (DSTRAN + STRAN)
+    matrix_vector_multiply(DDSDDE_elastic, strain_end, VOIGTSIZE_3D, elastic_stress);
 
     // Viscous Stress Update (Kelvin-Voigt Model)
-    // delta_viscous_stress; += eta * (DSTRAN / DTIME)
-    vector_scalar_multiply(DSTRAN, eta / *DTIME, VOIGTSIZE_3D, delta_viscous_stress);
+    vector_scalar_multiply(DSTRAN, eta / (*DTIME), VOIGTSIZE_3D, viscous_stress);
 
-    // add viscous contribution
-    // updated_stress = delta_stress
-    add_vectors(delta_elastic_stress, delta_viscous_stress, VOIGTSIZE_3D, updated_stress);
+    // Total Stress Update
+    add_vectors(elastic_stress, viscous_stress, VOIGTSIZE_3D, STRESS);
 
-
-    // Copy the trial stress to the output stress
-    copy_array(updated_stress, VOIGTSIZE_3D, STRESS);
-
-    // Copy the elastic stiffness matrix to the output Jacobian
+    // Consistent tangent: DDSDDE_elastic + eta/DTIME * I
     copy_array(DDSDDE_elastic, VOIGTSIZE_3D * VOIGTSIZE_3D, DDSDDE);
+    for (int i = 0; i < VOIGTSIZE_3D; ++i)
+    {
+        DDSDDE[i * VOIGTSIZE_3D + i] += eta / (*DTIME);
+    }
 
-    *SSE += vector_dot_product(STRESS, DSTRAN, VOIGTSIZE_3D);  // Specific elastic strain energy
+    // Energy Calculations
+    *SSE += vector_dot_product(elastic_stress, DSTRAN, VOIGTSIZE_3D);
+    *SPD += vector_dot_product(viscous_stress, DSTRAN, VOIGTSIZE_3D);
 
     return;
 }
