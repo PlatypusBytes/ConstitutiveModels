@@ -21,8 +21,7 @@ test_params = list(itertools.product(amplitudes, frequencies, E_values, eta_valu
 @pytest.mark.parametrize("amplitude,frequency,E,eta", test_params)
 def test_strain_controlled_cyclic_triaxial(amplitude, frequency, E, eta):
     """
-    Test the strain controlled triaxial test with a tensile cutoff in the vertical direction. Where enough tension is
-    applied such that the tensile cutoff is active.
+    Test the strain controlled triaxial test with cyclic loading using the Kelvin-Voigt viscoelastic model.
 
     :return:
     """
