@@ -5,8 +5,9 @@ from tests.utils import Utils
 
 
 class IncrDriver:
-    def __init__(self,initial_stress, strain_increment, stress_increment, constitutive_model_info, n_time_steps, t_step,
-                 max_iterations, ndim=3, n_direct_stress_components=3, n_shear_components=3, vertical_axis_index=1):
+    def __init__(self,initial_stress, strain_increment, stress_increment, constitutive_model_info, n_time_steps,
+                 max_iterations, t_step=1, ndim=3, n_direct_stress_components=3, n_shear_components=3,
+                 vertical_axis_index=1):
         """
         Initialize the IncrDriver class.
 
@@ -17,6 +18,7 @@ class IncrDriver:
             constitutive_model_info (dict): Information about the constitutive model, including language and file name.
             n_time_steps (int): The number of time steps to solve.
             max_iterations (int): The maximum number of iterations per time step for the solver.
+            t_step (float): The time step size. Default is 1.
             ndim (int): The number of dimensions for the problem. Default is 3 (3D).
             n_direct_stress_components (int): Number of direct stress components in the stress vector. Default is 3.
             n_shear_components (int): The number of shear components in the stress vector. Default is 3.

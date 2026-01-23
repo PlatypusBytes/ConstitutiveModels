@@ -1,6 +1,7 @@
 import os
 import sys
-from time import time
+import pytest
+import itertools
 import numpy as np
 
 from tests.incr_driver import IncrDriver
@@ -8,8 +9,17 @@ from tests.incr_driver import IncrDriver
 
 PLOTS = False
 
+# Define parameter combinations
+amplitudes = [0.002, -0.02]
+frequencies = [1, 5]
+E_values = [10e6, 200e6]
+eta_values = [1e5, 10e5]
 
-def test_strain_controlled_compression_triaxial():
+# Create all combinations
+test_params = list(itertools.product(amplitudes, frequencies, E_values, eta_values))
+
+@pytest.mark.parametrize("amplitude,frequency,E,eta", test_params)
+def test_strain_controlled_compression_triaxial(amplitude, frequency, E, eta):
     """
     Test the strain controlled triaxial test with a tensile cutoff in the vertical direction. Where enough tension is
     applied such that the tensile cutoff is active.
@@ -17,14 +27,10 @@ def test_strain_controlled_compression_triaxial():
     :return:
     """
 
-
     # Material parameters
-    E = 10e6  # Young's Modulus in Pa
     nu = 0.3  # Poisson's Ratio
-    eta = 5e5  # Viscosity in Pa.s
+
     # Strain parameters
-    amplitude = 0.0002
-    frequency = 1.0
     omega = 2.0 * np.pi * frequency
     total_time = 2.0
     delta_t = 0.005
@@ -34,7 +40,6 @@ def test_strain_controlled_compression_triaxial():
     strain = np.zeros((num_steps, 6))
     strain[:, 1] = amplitude * np.sin(omega * np.linspace(0, total_time, num_steps))
     strain_increment = np.diff(strain, axis=0, prepend=np.zeros((1, 6)))
-
 
     params = {'E': E, 'poisson_ratio': nu, 'eta': eta}
     state_vars={'strain': np.zeros(6)}
@@ -66,63 +71,59 @@ def test_strain_controlled_compression_triaxial():
                              stress_increment,
                              const_model_info,
                              len(time),
+                             5,
                              delta_t,
-                             5)
+                             )
 
     incr_driver.solve_triaxial_strain_controlled()
 
 
-    strain, stress = kelvin_voigt_triax(orig_stress_vector[:3], strain, E, nu, eta, time)
-
-    # import matplotlib.pyplot as plt
-    # plt.plot(incr_driver.strains[:, 1], incr_driver.stresses[:, 1], label='UMAT Result')
-    # plt.plot(strain, stress, label='Analytical Solution')
-    # plt.grid()
-    # plt.legend()
-    # plt.show()
+    strain_, stress_ = kelvin_voigt_triax(orig_stress_vector[:3], strain[:, :3], E, nu, eta, time)
 
     # Check the results
-    np.testing.assert_allclose(incr_driver.strains[:, 1], strain[:], atol=1e-16, rtol=1e-2)
-    np.testing.assert_allclose(incr_driver.stresses[:, 1], stress[:], atol=1e-16, rtol=1e-2)
+    np.testing.assert_allclose(incr_driver.strains[:, 1], strain_, atol=1e-16, rtol=1e-2)
+    np.testing.assert_allclose(incr_driver.stresses[:, 1], stress_, atol=1e-16, rtol=1e-2)
 
     if PLOTS:
         import matplotlib.pyplot as plt
-        plt.plot(incr_driver.strains[:, 1], incr_driver.stresses[:, 1], label='UMAT Result')
-        plt.plot(strain, stress, label='Analytical Solution')
-        plt.xlabel('Axial Strain')
-        plt.ylabel('Axial Stress (Pa)')
-        plt.grid()
-        plt.legend()
+        fig, ax = plt.subplots(2, 1, figsize=(8, 6))
+        ax[0].plot(incr_driver.strains[:, 1], incr_driver.stresses[:, 1], label='UMAT Result')
+        ax[0].plot(strain_, stress_, label='Analytical Solution')
+        ax[0].set_xlabel('Axial Strain [-]')
+        ax[0].set_ylabel('Axial Stress [Pa]')
+        ax[0].grid()
+        ax[0].legend()
+        ax[1].plot(time, incr_driver.strains[:, 1], label='UMAT Strain')
+        ax[1].plot(time, strain_, label='Analytical Strain')
+        ax[1].set_xlabel('Time [s]')
+        ax[1].set_ylabel('Axial Strain [-]')
+        ax[1].grid()
+        ax[1].legend()
         plt.show()
 
 
-    # plt.plot(time, incr_driver.strains[:, 0])
-    # plt.plot(time, incr_driver.strains[:, 1])
-    # plt.plot(time, incr_driver.strains[:, 2])
-    # plt.plot(time, incr_driver.strains[:, 3])
-    # plt.show()
-    # print(1)
-    # expected_strains = np.array([[-vertical_strain_increment*nu, vertical_strain_increment, -vertical_strain_increment*nu, 0, 0, 0],
-    #                                 [2*-vertical_strain_increment*nu, 2*vertical_strain_increment, 2*-vertical_strain_increment*nu, 0, 0, 0],
-    #                                 [2*-vertical_strain_increment*nu, 3*vertical_strain_increment, 2*-vertical_strain_increment*nu, 0, 0, 0]])
-
-    # expected_stresses = np.array([orig_stress_vector,orig_stress_vector,orig_stress_vector], dtype=float)
-    # expected_stresses[0,1] = expected_stresses[0,1]+ vertical_strain_increment * E
-    # expected_stresses[1,1] = expected_stresses[1,1] + vertical_strain_increment * E * 2
-    # expected_stresses[2,1] = tensile_cutoff
-
-    # # Check the results
-    # np.testing.assert_allclose(incr_driver.strains, expected_strains, rtol=1e-6)
-    # np.testing.assert_allclose(incr_driver.stresses, expected_stresses, rtol=1e-6)
-
-
 def kelvin_voigt_triax(ini_stress, strain_increment, E, nu, eta, time):
+    """
+    Auxiliary function to compute the analytical solution for triaxial test with Kelvin-Voigt model.
 
-    D = (E / ((1 + nu) * (1 - 2 * nu))) * np.array([
-        [1 - nu,  nu,       nu      ],
-        [nu,      1 - nu,   nu      ],
-        [nu,      nu,       1 - nu  ]
-    ])
+    Args:
+        ini_stress (array): Initial stress state [sigma_xx, sigma_yy, sigma_zz]
+        strain_increment (array): Strain increments over time steps (n_steps x 3)
+        E (float): Young's Modulus
+        nu (float): Poisson's Ratio
+        eta (float): Viscosity coefficient
+        time (array): Time array
+    Returns:
+        eps_xx (array): Axial strain over time
+        sigma_xx (array): Axial stress over time
+    """
+
+    # D matrix for isotropic linear elasticity in 3D
+    fct = E / ((1 + nu) * (1 - 2 * nu))
+    D = fct * np.array([[1 - nu, nu,     nu    ],
+                        [nu,     1 - nu, nu    ],
+                        [nu,     nu,     1 - nu]
+                        ])
 
     n_steps = len(time)
     t_step = time[1] - time[0]
@@ -143,35 +144,24 @@ def kelvin_voigt_triax(ini_stress, strain_increment, E, nu, eta, time):
         # Prescribed axial cyclic strain
         eps_xx[i] = eps[0] = strain_increment[i, 1]
 
-        # Compute lateral strains (eps_yy, eps_zz) from triaxial constraint
-        # Solve: sigma_lat = sigma_conf = E*eps_lat + eta*d_eps_lat/dt + coupling
-        # Here we do simple explicit step for viscous part
-
-        # Define A*eps_lat = sigma_lat - E coupling
         # Lateral strain unknowns: eps_yy, eps_zz
         A = D[1:,1:] + (eta/t_step) * np.eye(2)
-        # b = np.array([
-        #     ini_stress[1] - D[1,0]*eps[0] + (eta/t_step)*eps_yy[i-1] if i>0 else 0,
-        #     ini_stress[2] - D[2,0]*eps[0] + (eta/t_step)*eps_zz[i-1] if i>0 else 0
-        # ])
 
-
+        # initialize b
         if i == 0:
-            b = np.array([
-                ini_stress[1] - D[1,0]*eps[0],
-                ini_stress[2] - D[2,0]*eps[0]
-            ])
+            b = np.array([ini_stress[1] - D[1,0]*eps[0],
+                          ini_stress[2] - D[2,0]*eps[0]
+                          ])
             sigma = D @ eps
         else:
             b = np.array([
                 ini_stress[1] - D[1,0]*eps[0] + (eta/t_step)*eps_yy[i-1],
                 ini_stress[2] - D[2,0]*eps[0] + (eta/t_step)*eps_zz[i-1]
             ])
-            sigma = D @ eps + eta * np.array([
-                (eps[0] - eps_xx[i-1])/t_step,
-                (eps[1] - eps_yy[i-1])/t_step,
-                (eps[2] - eps_zz[i-1])/t_step
-            ])
+            sigma = D @ eps + eta * np.array([(eps[0] - eps_xx[i-1])/t_step,
+                                              (eps[1] - eps_yy[i-1])/t_step,
+                                              (eps[2] - eps_zz[i-1])/t_step
+                                              ])
 
         eps_lat = np.linalg.solve(A, b)
         eps[1] = eps_yy[i] = eps_lat[0]
@@ -179,9 +169,9 @@ def kelvin_voigt_triax(ini_stress, strain_increment, E, nu, eta, time):
 
         # Axial stress including viscous contribution
         sigma = D @ eps + eta * np.array([
-            (eps[0] - eps_xx[i-1])/t_step if i>0 else 0,
-            (eps[1] - eps_yy[i-1])/t_step if i>0 else 0,
-            (eps[2] - eps_zz[i-1])/t_step if i>0 else 0
+            (eps[0] - eps_xx[i-1])/t_step,
+            (eps[1] - eps_yy[i-1])/t_step,
+            (eps[2] - eps_zz[i-1])/t_step
         ])
 
         sigma_xx[i] = sigma[0]
