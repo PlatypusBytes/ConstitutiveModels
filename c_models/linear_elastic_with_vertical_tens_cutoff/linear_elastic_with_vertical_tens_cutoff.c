@@ -28,7 +28,6 @@ int check_properties(const int NPROPS, const double* PROPS);
 // Define the UMAT function signature expected by the FEA software.
 //       Check your specific FEA software documentation for exact C interface requirements if
 //       available. Some systems might require all arguments to be pointers, even scalars.
-
 UMAT_EXPORT void UMAT_CALLCONV umat(
     // Outputs (to be updated by the subroutine)
     double* STRESS,  // Stress tensor at end of increment (NTENS components)

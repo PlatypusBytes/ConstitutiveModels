@@ -6,7 +6,8 @@ from tests.utils import Utils
 
 class IncrDriver:
     def __init__(self,initial_stress, strain_increment, stress_increment, constitutive_model_info, n_time_steps,
-                 max_iterations, ndim=3, n_direct_stress_components=3, n_shear_components=3, vertical_axis_index=1):
+                 max_iterations, t_step=1, ndim=3, n_direct_stress_components=3, n_shear_components=3,
+                 vertical_axis_index=1):
         """
         Initialize the IncrDriver class.
 
@@ -17,6 +18,7 @@ class IncrDriver:
             constitutive_model_info (dict): Information about the constitutive model, including language and file name.
             n_time_steps (int): The number of time steps to solve.
             max_iterations (int): The maximum number of iterations per time step for the solver.
+            t_step (float): The time step size. Default is 1.
             ndim (int): The number of dimensions for the problem. Default is 3 (3D).
             n_direct_stress_components (int): Number of direct stress components in the stress vector. Default is 3.
             n_shear_components (int): The number of shear components in the stress vector. Default is 3.
@@ -30,6 +32,7 @@ class IncrDriver:
         self.stress_increment = stress_increment
         self.constitutive_model_info = constitutive_model_info
         self.n_time_steps = n_time_steps
+        self.t_step = t_step
         self.max_iterations = max_iterations
 
         self.ndim = ndim
@@ -114,7 +117,7 @@ class IncrDriver:
         # run umat in order to retrieve the elastic matrix
         _, ddsdde, _ = runner(self.constitutive_model_info['file_name'], self.initial_stress, np.copy(state_variables),
                               np.zeros(self.voigt_size), np.zeros(self.voigt_size),
-                              self.constitutive_model_info["properties"], 0, self.n_direct_stress_components,
+                              self.constitutive_model_info["properties"], self.t_step, self.n_direct_stress_components,
                               self.n_shear_components)
 
         # initialize stress and strain vectors
@@ -126,8 +129,14 @@ class IncrDriver:
 
         # loop over time steps
         for t in range(self.n_time_steps):
+            # check if strain is a list of lists (multiple increments per time step -> cyclic testing)
+            if self.strain_increment.ndim > 1:
+                delta_strain = np.copy(self.strain_increment[t])
+                stress_inc = self.stress_increment[t]
+            else:
+                delta_strain = np.copy(self.strain_increment)
+                stress_inc = self.stress_increment
 
-            delta_strain = np.copy(self.strain_increment)
             correction_delta_strain = np.zeros(self.voigt_size)
             approx_delta_stress = np.zeros(self.voigt_size)
 
@@ -141,7 +150,7 @@ class IncrDriver:
             for i in range(self.max_iterations + 1):
 
                 # get stress increment at stress controlled components, else zero
-                stress_increment = np.where(control_type, self.stress_increment, 0.0)
+                stress_increment = np.where(control_type, stress_inc, 0.0)
 
                 # calculate the undesired stress
                 u_d_stress = stress_increment + approx_delta_stress
@@ -156,7 +165,8 @@ class IncrDriver:
                 stress_updated, ddsdde, state_variables = runner(self.constitutive_model_info['file_name'],
                                                                  stress_vector, state_variables, strain_vector,
                                                                  delta_strain,
-                                                                 self.constitutive_model_info["properties"], t,
+                                                                 self.constitutive_model_info["properties"],
+                                                                 self.t_step,
                                                                  self.n_direct_stress_components,
                                                                  self.n_shear_components)
 

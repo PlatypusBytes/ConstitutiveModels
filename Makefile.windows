@@ -38,6 +38,7 @@ LINEAR_ELASTIC_TENS_DIR = $(C_MODELS_DIR)\linear_elastic_with_vertical_tens_cuto
 LINEAR_ELASTIC_TENS_2D_INTERFACE_DIR = $(C_MODELS_DIR)\linear_elastic_with_vertical_tens_cutoff_2d_interface
 LINEAR_ELASTIC_TENS_3D_INTERFACE_DIR = $(C_MODELS_DIR)\linear_elastic_with_vertical_tens_cutoff_3d_interface
 MATSUOKA_NAKAI_DIR = $(C_MODELS_DIR)\matsuoka_nakai
+VISCOELASTIC_KELVIN_VOIGT_DIR = $(C_MODELS_DIR)\viscoelastic_kelvin_voigt
 YIELD_SURFACES_DIR = $(C_MODELS_DIR)\yield_surfaces
 
 # Include directories (using /I prefix required by cl.exe)
@@ -55,7 +56,8 @@ LIBS = \
     $(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff$(SO_EXT) \
     $(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff_2d_interface$(SO_EXT) \
     $(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff_3d_interface$(SO_EXT) \
-    $(LIB_DIR)\matsuoka_nakai$(SO_EXT)
+	$(LIB_DIR)\matsuoka_nakai$(SO_EXT) \
+	$(LIB_DIR)\viscoelastic_kelvin_voigt$(SO_EXT)
 
 # --- Targets ---
 
@@ -83,6 +85,9 @@ $(BUILD_DIR)\stress_utils$(OBJ_EXT): $(C_MODELS_DIR)\stress_utils.c $(C_MODELS_D
 
 $(BUILD_DIR)\hookes_law$(OBJ_EXT): $(ELASTIC_LAWS_DIR)\hookes_law.c $(ELASTIC_LAWS_DIR)\hookes_law.h
 	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(ELASTIC_LAWS_DIR)\hookes_law.c
+
+$(BUILD_DIR)\viscoelastic_kelvin_voigt$(OBJ_EXT): $(VISCOELASTIC_KELVIN_VOIGT_DIR)\viscoelastic_kelvin_voigt.c
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(VISCOELASTIC_KELVIN_VOIGT_DIR)\viscoelastic_kelvin_voigt.c
 
 # Matsuoka-Nakai yield surface
 $(BUILD_DIR)\matsuoka_nakai_surface$(OBJ_EXT): $(YIELD_SURFACES_DIR)\matsuoka_nakai_surface.c $(YIELD_SURFACES_DIR)\matsuoka_nakai_surface.h
@@ -118,6 +123,9 @@ $(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff_3d_interface$(SO_EXT): $(COM
 	$(CC) $(LDFLAGS) /Fe$@ $**
 
 $(LIB_DIR)\matsuoka_nakai$(SO_EXT): $(COMMON_OBJS) $(BUILD_DIR)\matsuoka_nakai_surface$(OBJ_EXT) $(BUILD_DIR)\matsuoka_nakai$(OBJ_EXT)
+	$(CC) $(LDFLAGS) /Fe$@ $**
+
+$(LIB_DIR)\viscoelastic_kelvin_voigt$(SO_EXT): $(COMMON_OBJS) $(BUILD_DIR)\viscoelastic_kelvin_voigt$(OBJ_EXT)
 	$(CC) $(LDFLAGS) /Fe$@ $**
 
 
