@@ -41,7 +41,7 @@ def test_strain_controlled_cyclic_triaxial(amplitude, frequency, E, eta):
     strain_increment = np.diff(strain, axis=0, prepend=np.zeros((1, 6)))
 
     params = {'E': E, 'poisson_ratio': nu, 'eta': eta}
-    state_vars={'strain': np.zeros(6)}
+    state_vars={'elastic_stress': np.zeros(6)}
 
     # Define the original stress vector
     orig_stress_vector = np.array([-1., -1., -1., 0, 0, 0])
@@ -101,13 +101,13 @@ def test_strain_controlled_cyclic_triaxial(amplitude, frequency, E, eta):
         plt.show()
 
 
-def kelvin_voigt_triax(ini_stress, strain_increment, E, nu, eta, time):
+def kelvin_voigt_triax(ini_stress, strain, E, nu, eta, time):
     """
     Auxiliary function to compute the analytical solution for triaxial test with Kelvin-Voigt model.
 
     Args:
         ini_stress (array): Initial stress state [sigma_xx, sigma_yy, sigma_zz]
-        strain_increment (array): Strain increments over time steps (n_steps x 3)
+        strain (array): Strain over time steps (n_steps x 3)
         E (float): Young's Modulus
         nu (float): Poisson's Ratio
         eta (float): Viscosity coefficient
@@ -137,11 +137,11 @@ def kelvin_voigt_triax(ini_stress, strain_increment, E, nu, eta, time):
 
     # Initial conditions
     eps = np.zeros(3)
-    sigma = np.array(ini_stress)  # initial stress
+    # sigma = np.array(ini_stress)  # initial stress
 
     for i, t in enumerate(time):
         # Prescribed axial cyclic strain
-        eps_xx[i] = eps[0] = strain_increment[i, 1]
+        eps_xx[i] = eps[0] = strain[i, 1]
 
         # Lateral strain unknowns: eps_yy, eps_zz
         A = D[1:,1:] + (eta/t_step) * np.eye(2)
