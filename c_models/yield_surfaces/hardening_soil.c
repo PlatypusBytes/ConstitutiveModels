@@ -2,12 +2,12 @@
 double shear_yield_function(const double q_a,const double q, const double E_50, const double E_ur, const double gamma_ps)
 {
 
-
-//double f_1 = q_a/E_50 * q /(q_a - q) - 2* q/ E_ur - gamma_ps;
+// shanz formulation
+double f_1 = q_a/E_50 * q /(q_a - q) - 2* q/ E_ur - gamma_ps;
 
 // plaxis manual:
 
-double f_1 = 2 * q_a/E_50 * q /(q_a - q) - 2* q/ E_ur - gamma_ps;
+//double f_1 = 2 * q_a/E_50 * q /(q_a - q) - 2* q/ E_ur - gamma_ps;
 
 return f_1;
 
@@ -94,11 +94,26 @@ double calculate_special_deviatoric_stress(const double sigma_1, const double si
 
 
 // plastic shear strain
-double calculate_shear_hardening_parameter(const double plastic_strain_1, const double plastic_strain_vol)
+double calculate_shear_hardening_parameter(const double plastic_strain_1, const double plastic_strain_2, const double plastic_strain_3)
 {
-double gamma_ps = -(2* plastic_strain_1 - plastic_strain_vol) ;
-return gamma_ps;
+    // calculate the shear hardening parameter based on the plastic strains in the three directions
+    // this is an approximation, as the actual relationship may be more complex and depend on other factors such as the material properties and loading conditions
+
+    double plastic_strain_vol = plastic_strain_1 + plastic_strain_2 + plastic_strain_3;
+    // for simplicity, we can use a linear combination of the plastic strains, with weights that reflect their relative contributions to shear hardening
+    double gamma_ps = 2 * plastic_strain_1 - plastic_strain_vol;
+
+    return gamma_ps;
 }
+//double calculate_shear_hardening_parameter(const double plastic_strain_1, const double plastic_strain_vol)
+//{
+//
+////double gamma_ps = -(2* plastic_strain_1 - plastic_strain_vol) ;
+//
+//// approximation is:
+//double gamma_ps = 2 * plastic_strain_1;
+//return gamma_ps;
+//}
 
 double calculate_ultimate_deviatoric_stress(const double c, const double phi_rad,  const double sigma_3)
 {

@@ -82,6 +82,17 @@ def test_strain_controlled_compression_triaxial():
     expected_stresses[4, 1] = expected_vertical_yield_stress
     expected_stresses[5, 1] = expected_vertical_yield_stress
 
+
+    import matplotlib.pyplot as plt
+    plt.plot(incr_driver.strains[:,1], incr_driver.stresses[:,1], label='Matsuoka-Nakai')
+    plt.plot(expected_strains[:,1], expected_stresses[:,1], label='Expected', linestyle='dashed')
+    plt.xlabel('Vertical Strain')
+    plt.ylabel('Vertical Stress')
+    plt.title('Strain-Controlled Triaxial Test in Compression')
+    plt.legend()
+    plt.grid()
+    plt.show()
+
     # Check the results
     np.testing.assert_allclose(incr_driver.strains, expected_strains, rtol=1e-6)
     np.testing.assert_allclose(incr_driver.stresses, expected_stresses, rtol=1e-6)

@@ -145,9 +145,6 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     // initialization
     // run mohr coulomb
 
-
-
-
     // --- 1. Calculate Elastic Stiffness Matrix ---
     calculate_elastic_stiffness_matrix_3d(E_mod, nu, Ce_matrix);
 
@@ -161,85 +158,126 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
     add_vectors(STRESS, delta_stress, VOIGTSIZE_3D,
                 stress_trial);  // stress_trial = STRESS + delta_stress
 
-    // calculate invariants
-    double p_trial, J_trial, theta_trial, j2_trial, j3_trial;
-    calculate_stress_invariants_3d(stress_trial, &p_trial, &J_trial, &theta_trial, &j2_trial,
-                                   &j3_trial, s_dev);  // s_dev also calculated here
+    double mean_stress = (sigma_1 + sigma_2 + sigma_3) / 3.0;
+    double q = sigma_1 - sigma_3;
 
-    // matsuoka nakai constants
-    double alpha = 0;
-    double beta = 0;
-    double gamma = 0;
-    double K = 0;
-    double M = 0;
+        // ultimate deviatoric stress
+    double q_f = calculate_ultimate_deviatoric_stress(c, phi_rad, mean_stress);
+    double q_a = Rf * q_f; // hardening parameter, approximated as a fraction of the ultimate stress
 
-    // yield function
-    double f_trial = 0.0;
+    double plastic_strain_1 = STATEV[0]; // Assuming plastic_strain_1 is stored in the first state variable
+    double plastic_strain_2 = STATEV[1]; // Assuming plastic_strain_2 is stored in the second state variable
+    double plastic_strain_3 = STATEV[2]; // Assuming plastic_strain_3 is stored in the third state variable
 
-    // Calculate yield function value , shear yield
-    calculate_matsuoka_nakai_constants(phi_rad, c, &alpha, &beta, &gamma, &K, &M);
-    calculate_yield_function(p_trial, theta_trial, J_trial, c, phi_rad, alpha, beta, gamma, K, M,
-                             &f_trial);
+    double gamma_ps = calculate_shear_hardening_parameter(plastic_strain_1, plastic_strain_2, plastic_strain_3)
 
-    // yield function greater than zero, calculate plastic correction
-    if (f_trial > ZERO_TOL)
+    f = shear_yield_function(q_a,  q, E_50, E_ur, gamma_ps)
+    res = f;
+
+    int i = 0;
+    while (i < max_iter && abs(res) > ZERO_TOL)
     {
-        // gradient yield function
-        calculate_stress_invariants_derivatives_3d(J_trial, s_dev, j2_trial, j3_trial, dp_dsig,
-                                                   dJ_dsig, dtheta_dsig);
+        // calculate cone parameters
+        parameters = calculate_cone_parameters();
 
-        double mats_nak_constants[5] = {phi_rad, M, alpha, beta, gamma};
+        double dgdsigma[VOIGTSIZE_3D];
 
-        calculate_yield_gradient(theta_trial, J_trial, mats_nak_constants, dp_dsig, dJ_dsig,
-                                 dtheta_dsig, grad_f);
+        derivative_shear_yield_function(const double q_a, const double q, const double E_50, const double E_ur, const double gamma_ps, dgdsigma)
 
-        // gradient potential function, g, it is required to recalculate the constants using psi
-        calculate_matsuoka_nakai_constants(psi_rad, c, &alpha, &beta, &gamma, &K, &M);
-        double mats_nak_constants_plastic_potential[5] = {psi_rad, M, alpha, beta, gamma};
+        dgdsigma = calculate_cone_dgdsigma();
+        // normalize
 
-        calculate_yield_gradient(theta_trial, J_trial, mats_nak_constants_plastic_potential,
-                                 dp_dsig, dJ_dsig, dtheta_dsig, grad_g);
 
-        // Calculate terms needed for delta_gamma and Jacobian
-        matrix_vector_multiply(Ce_matrix, grad_g, VOIGTSIZE_3D, Ce_grad_g);  // Ce * g
-        matrix_vector_multiply(Ce_matrix, grad_f, VOIGTSIZE_3D, Ce_grad_f);  // Ce * f
+        dfdh = calculate_dfdh_cone();
+        dhdlamda = calculate_dhdlambda();
 
-        // Calculate denominator for delta_gamma (and Jacobian)
-        // Assumes perfect plasticity (Hardening modulus H=0)
-        // Denom = A_vec : Ce : g_vec = grad_f . (Ce * grad_g)
-        double denom = vector_dot_product(grad_f, Ce_grad_g, VOIGTSIZE_3D);
-        double delta_gamma = f_trial / denom;
+        dfdsigma = calculate_dfdsigma();
 
-        // --- Update Stress ---
-        // STRESS_{n+1} = stress_trial - delta_gamma * Ce * g_vec
-        for (i = 0; i < VOIGTSIZE_3D; ++i)
-        {
-            STRESS[i] = stress_trial[i] - delta_gamma * Ce_grad_g[i];
-        }
+        matrix_vector_multiply(D, dgdsigma, VOIGTSIZE_3D, Ddgdsigma);
 
-        // dEps_p = delta_gamma * g_vec
-        vector_scalar_multiply(grad_g, delta_gamma, VOIGTSIZE_3D, dEps_p);
+        double dfdsigmaDdgdsigma =  vector_dot_product(dfdsigma, Ddgdsigma, VOIGTSIZE_3D);
 
-        double dSpd = vector_dot_product(STRESS, dEps_p, VOIGTSIZE_3D);
-        *SPD += dSpd;
+        dfdlambda = dfdsigmaDdgdsigma - dfdh * dhdlamda;
 
-        // Calculate outer product of Ce_grad_g and Ce_grad_f
-        const double Ce_grad_g_outer_Ce_grad_f[VOIGTSIZE_3D * VOIGTSIZE_3D];
-        vector_outer_product(Ce_grad_g, Ce_grad_f, VOIGTSIZE_3D, Ce_grad_g_outer_Ce_grad_f);
+        // implicit
+        d_lambda = d_lambda + res /(dfdlambda); // + viscosity / (d_t + SMALL_VALUE));
 
-        // --- Calculate Consistent Tangent Modulus (Jacobian DDSDDE) ---
-        // DDSDDE = Ce - (Ce * g) outer_prod (Ce * f)^T / denom
-        if (fabs(denom) > ZERO_TOL)
-        {  // Redundant check, but safe
-            for (i = 0; i < VOIGTSIZE_3D * VOIGTSIZE_3D; ++i)
-            {
-                // Accessing 1D array DDSDDE with row-major logic
-                DDSDDE[i] = Ce_matrix[i] - Ce_grad_g_outer_Ce_grad_f[i] / denom;
-            }
-        }
+        d_eps_p = d_lambda * dgdsigma;
+        d_eps_p_vol = calculate_volumetric_strain_3d(d_eps_p);
+        eps_p_vol = eps_p_vol_state + d_eps_p_vol;
 
-        STATEV[0] = 1.0;  // Indicate that yield surface was reached
+        princ_stress = princ_stress_elast - d_lambda * Ddgdsigma;
+        // resort princ stress
+        sort(princ_stress, VOIGTSIZE_3D);
+
+        f = cone_yield_function();
+        res = calculate_residual(f);
+
+        i++;
+
     }
+
+
+
+//    // yield function greater than zero, calculate plastic correction
+//    if (f_trial > ZERO_TOL)
+//    {
+//        // gradient yield function
+//        calculate_stress_invariants_derivatives_3d(J_trial, s_dev, j2_trial, j3_trial, dp_dsig,
+//                                                   dJ_dsig, dtheta_dsig);
+//
+//        double mats_nak_constants[5] = {phi_rad, M, alpha, beta, gamma};
+//
+//        calculate_yield_gradient(theta_trial, J_trial, mats_nak_constants, dp_dsig, dJ_dsig,
+//                                 dtheta_dsig, grad_f);
+//
+//        // gradient potential function, g, it is required to recalculate the constants using psi
+//        calculate_matsuoka_nakai_constants(psi_rad, c, &alpha, &beta, &gamma, &K, &M);
+//        double mats_nak_constants_plastic_potential[5] = {psi_rad, M, alpha, beta, gamma};
+//
+//        calculate_yield_gradient(theta_trial, J_trial, mats_nak_constants_plastic_potential,
+//                                 dp_dsig, dJ_dsig, dtheta_dsig, grad_g);
+//
+//        // Calculate terms needed for delta_gamma and Jacobian
+//        matrix_vector_multiply(Ce_matrix, grad_g, VOIGTSIZE_3D, Ce_grad_g);  // Ce * g
+//        matrix_vector_multiply(Ce_matrix, grad_f, VOIGTSIZE_3D, Ce_grad_f);  // Ce * f
+//
+//        // Calculate denominator for delta_gamma (and Jacobian)
+//        // Assumes perfect plasticity (Hardening modulus H=0)
+//        // Denom = A_vec : Ce : g_vec = grad_f . (Ce * grad_g)
+//        double denom = vector_dot_product(grad_f, Ce_grad_g, VOIGTSIZE_3D);
+//        double delta_gamma = f_trial / denom;
+//
+//        // --- Update Stress ---
+//        // STRESS_{n+1} = stress_trial - delta_gamma * Ce * g_vec
+//        for (i = 0; i < VOIGTSIZE_3D; ++i)
+//        {
+//            STRESS[i] = stress_trial[i] - delta_gamma * Ce_grad_g[i];
+//        }
+//
+//        // dEps_p = delta_gamma * g_vec
+//        vector_scalar_multiply(grad_g, delta_gamma, VOIGTSIZE_3D, dEps_p);
+//
+//        double dSpd = vector_dot_product(STRESS, dEps_p, VOIGTSIZE_3D);
+//        *SPD += dSpd;
+//
+//        // Calculate outer product of Ce_grad_g and Ce_grad_f
+//        const double Ce_grad_g_outer_Ce_grad_f[VOIGTSIZE_3D * VOIGTSIZE_3D];
+//        vector_outer_product(Ce_grad_g, Ce_grad_f, VOIGTSIZE_3D, Ce_grad_g_outer_Ce_grad_f);
+//
+//        // --- Calculate Consistent Tangent Modulus (Jacobian DDSDDE) ---
+//        // DDSDDE = Ce - (Ce * g) outer_prod (Ce * f)^T / denom
+//        if (fabs(denom) > ZERO_TOL)
+//        {  // Redundant check, but safe
+//            for (i = 0; i < VOIGTSIZE_3D * VOIGTSIZE_3D; ++i)
+//            {
+//                // Accessing 1D array DDSDDE with row-major logic
+//                DDSDDE[i] = Ce_matrix[i] - Ce_grad_g_outer_Ce_grad_f[i] / denom;
+//            }
+//        }
+//
+//        STATEV[0] = 1.0;  // Indicate that yield surface was reached
+//    }
     else
     {
         // --- Elastic Step ---
@@ -262,6 +300,15 @@ double calculate_stress_dependency_factor(const double c, const double phi_rad, 
     const double c_cos_phi = c * cos(phi_rad);
     double factor = pow((c_cos_phi - sigma_3*sin(phi_rad))/(c_cos_phi + p_ref * sin(phi_rad)),m);
     return factor;
+}
+
+
+double calculate_ultimate_deviatoric_stress(const double c, const double phi_rad, const double mean_stress)
+{
+    // follows from mohr coulomb yield criterion
+    double q_f = 6 * sin(phi_rad) / (3- sin(phi_rad)) * (mean_stress +  c /tan(phi_rad));
+
+    return q_f;
 }
 
 void calculate_stress_on_yield_surface()

@@ -4,6 +4,8 @@ int calculate_cap_hardening()
 {
     double Ddgdsigma[VOIGTSIZE_3D];
 
+    q_special = calculate_special_deviatoric_stress(const double sigma_1, const double sigma_2, const double sigma_3, const double phi_rad)
+
     f = cap_yield_function(q_special, M, p, pc);
     if (f< ZERO_TOL)
     {
@@ -114,7 +116,6 @@ int calculate_cone_hardening()
         sort(princ_stress, VOIGTSIZE_3D);
 
         f = cone_yield_function();
-
         res = calculate_residual(f);
 
         i++;

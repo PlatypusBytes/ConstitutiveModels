@@ -99,6 +99,8 @@ class IncrDriver:
             runner = Utils.run_c_umat
         elif language == "fortran":
             runner = Utils.run_fortran_umat
+        elif language == "python_hardening_soil":
+            runner = Utils.run_python_hardening_soil
         else:
             raise ValueError(f"Language {language} not supported. Only 'c' and 'fortran' are supported.")
 
