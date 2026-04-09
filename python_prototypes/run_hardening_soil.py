@@ -20,9 +20,8 @@ def voigt_to_matrix(v):
 def example_triaxial_test():
     from tests.incr_driver import IncrDriver
     cell_pressure = 100.0
-    sigma0 = np.array([[cell_pressure, 0.0, 0.0],
-                       [0.0, cell_pressure, 0.0],
-                       [0.0, 0.0, cell_pressure]])
+
+    sigma0 = np.array([cell_pressure,cell_pressure,cell_pressure,0,0,0])
 
 
     initial_stress = sigma0
@@ -78,7 +77,9 @@ def example_triaxial_test():
 
     # initialize stress and strain vectors
     strain_vector = np.zeros(voigt_size)
-    stress_vector = np.copy(matrix_to_voigt(initial_stress))
+    stress_vector = np.copy(initial_stress)
+
+    # stress_vector = np.copy(matrix_to_voigt(initial_stress))
 
     stresses = []
     strains = []
@@ -128,8 +129,8 @@ def example_triaxial_test():
             delta_strain = delta_strain - correction_delta_strain
 
             # run constitutive model
-            model.integrate(voigt_to_matrix(delta_strain))
-            stress_updated = matrix_to_voigt(model.sigma)
+            model.integrate(np.copy(delta_strain))
+            stress_updated = np.copy(model.sigma)
             ddsdde = model.ddsde(model.sigma)
 
             if i < max_iterations:
@@ -140,14 +141,14 @@ def example_triaxial_test():
 
                 # reset stress vector and state variables
                 stress_vector = np.copy(old_d_stress_vector)
-                model.sigma = voigt_to_matrix(stress_vector)
+                model.sigma = np.copy(stress_vector)
                 state_variables = np.copy(prev_state_variables)
                 model.p_p = state_variables[0]
                 model.gamma_p = state_variables[1]
             else:
                 strain_vector = strain_vector + delta_strain
                 stress_vector = np.copy(stress_updated)
-                model.sigma = voigt_to_matrix(stress_vector)
+                model.sigma = np.copy(stress_vector)
 
                 stiffness = ddsdde[0,0]  # axial stiffness
                 stiffnesses.append(stiffness)
@@ -164,6 +165,19 @@ def example_triaxial_test():
 
 if __name__ == "__main__":
 
+
+
+    import cProfile
+    #
+    # cProfile.run('example_triaxial_test()', "hs_profile")
+
+    # import pstats
+
+    # p = pstats.Stats("hs_profile")
+    # p.strip_dirs().sort_stats("time").print_stats(20)
+
+
+    #
     np_strains, np_stresses, np_stiffnesses= example_triaxial_test()
 
     q = np.sqrt(3/2 * ((np_stresses[:,0] - np_stresses[:,1])**2 + (np_stresses[:,1] - np_stresses[:,2])**2 + (np_stresses[:,2] - np_stresses[:,0])**2))

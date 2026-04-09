@@ -4,13 +4,18 @@ import numpy as np
 class StressUtils:
 
     @staticmethod
-    def p(sigma):
-        return np.trace(sigma) / 3.0
+    def p(sigma_voigt):
+        """
+        Calculates the mean stress (pressure) from the voigt notation stress vector.
+        """
+
+        return (sigma_voigt[0] + sigma_voigt[1] + sigma_voigt[2]) / 3.0
+
 
     @staticmethod
-    def q(sigma):
-        s = sigma - StressUtils.p(sigma) * np.eye(3)
-        J2 = 0.5 * np.einsum('ij,ij', s, s)
+    def q(sigma_voigt):
 
-        # return sigma[0,0] - sigma[2,2]
+
+        s = sigma_voigt - StressUtils.p(sigma_voigt) * np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+        J2 = 0.5 * s @ s
         return np.sqrt(3.0 * J2)

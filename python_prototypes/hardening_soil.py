@@ -5,6 +5,18 @@ from python_prototypes.stress_utils import StressUtils
 from python_prototypes.hardening_laws import HardeningLaws
 from python_prototypes.yield_functions import YieldFunctions
 
+def matrix_to_voigt(m):
+    return np.array([m[0,0], m[1,1], m[2,2], m[1,2], m[0,2], m[0,1]])
+
+def voigt_to_matrix(v):
+    m = np.zeros((3,3))
+    m[0,0] = v[0]
+    m[1,1] = v[1]
+    m[2,2] = v[2]
+    m[1,2] = m[2,1] = v[3]
+    m[0,2] = m[2,0] = v[4]
+    m[0,1] = m[1,0] = v[5]
+    return m
 
 class HardeningSoilWithCap:
     """
@@ -78,14 +90,14 @@ class HardeningSoilWithCap:
     # ------------------------------------------------------------------
 
 
-    def _Ei(self, sigma):
+    def _Ei(self, sigma_voigt):
         """Stress‑dependent initial stiffness for elastic predictor."""
         # p = StressUtils.p(sigma)
         denom = self.p_t + self.pref
         if denom == 0.0:
             denom = 1e-12
         if self.recalculate_Ei:
-            res_1= self.Ei_ref * ((sigma[2,2]  + self.p_t)/(self.pref + self.p_t) )** self.m
+            res_1= self.Ei_ref * ((sigma_voigt[2]  + self.p_t)/(self.pref + self.p_t) )** self.m
             self.Ei_current = res_1
         else:
             res_1 = self.Ei_current
@@ -95,7 +107,7 @@ class HardeningSoilWithCap:
         return res_1
 
 
-    def _E50(self, sigma):
+    def _E50(self, sigma_voigt):
         """Stress‑dependent primary loading stiffness (used in cone yield)."""
 
         denom = self.p_t + self.pref
@@ -104,7 +116,7 @@ class HardeningSoilWithCap:
 
         if self.recalculate_E50:
 
-            res_1 = self.E50_ref * ((sigma[2,2]  + self.p_t)/(self.pref + self.p_t) )** self.m
+            res_1 = self.E50_ref * ((sigma_voigt[2]  + self.p_t)/(self.pref + self.p_t) )** self.m
 
             self.E50_current = res_1
         else:
@@ -120,13 +132,13 @@ class HardeningSoilWithCap:
         if denom == 0.0:
             denom = 1e-12
 
-        ratio =  (sigma[2,2]  + self.p_t)/(self.pref + self.p_t)
+        ratio =  (sigma[2]  + self.p_t)/(self.pref + self.p_t)
         if ratio <= 0.0:
             ratio = 1e-12
 
         if self.recalculate_Eur:
 
-            res_1 = self.Eur_ref * ((sigma[2, 2] + self.p_t) / (self.pref + self.p_t) )** self.m
+            res_1 = self.Eur_ref * ((sigma[2] + self.p_t) / (self.pref + self.p_t) )** self.m
             self.Eur_current = res_1
         else:
             res_1 = self.Eur_current
@@ -135,15 +147,15 @@ class HardeningSoilWithCap:
 
         return res_1
 
-    def _qf(self, sigma):
+    def _qf(self, sigma_voigt):
         """Failure deviator stress (triaxial compression)."""
         sin_phi = np.sin(self.phi)
 
-        qf  = (2 * sin_phi / (1 - sin_phi)) * (sigma[2,2] + self.p_t)
+        qf  = (2 * sin_phi / (1 - sin_phi)) * (sigma_voigt[2] + self.p_t)
         return qf
 
-    def _sin_phi_mob(self, sigma):
-        sin_phi_mob = (sigma[0,0] - sigma[2,2]) / (sigma[0,0] + sigma[2,2] + 2* self.p_t)
+    def _sin_phi_mob(self, sigma_voigt):
+        sin_phi_mob = (sigma_voigt[0] - sigma_voigt[2]) / (sigma_voigt[0] + sigma_voigt[2] + 2* self.p_t)
         return sin_phi_mob
 
     def _qa(self, sigma):
@@ -166,9 +178,10 @@ class HardeningSoilWithCap:
     def elastic_product(self, dqdsigma, Eur, nu):
         """Compute De : m (tensor)."""
         G, K = self.elastic_moduli(Eur, nu)
-        trace_dqdsigma = np.trace(dqdsigma)
+        trace_dqdsigma = dqdsigma[0] + dqdsigma[1] + dqdsigma[2]
+        # trace_dqdsigma = np.trace(dqdsigma)
         lame_lambda = K - 2.0 * G / 3.0
-        return 2.0 * G * dqdsigma + lame_lambda * trace_dqdsigma * np.eye(3)
+        return 2.0 * G * dqdsigma + lame_lambda * trace_dqdsigma * np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
 
 
 
@@ -209,7 +222,7 @@ class HardeningSoilWithCap:
             self.p_p = p_p0
         self.initialized = True
 
-    def integrate(self, deps, tol=1e-5, max_iter=10, max_subdivisions=20):
+    def integrate(self, deps, tol=1e-5, max_iter=20, max_subdivisions=20):
         """
         Integrate stress for a given strain increment with automatic substepping.
         Handles combined cone‑cap activation using multi‑surface cutting plane.
@@ -234,10 +247,11 @@ class HardeningSoilWithCap:
         # q_step = min_d_deviatoric*qf
         # max_it1 = np.ceil(q / q_step)
 
-
-
+        delta_sigma_el = self._calculate_dsigma_elastic(self._Eur(sigma), self.nu, deps)
+        # qa_trial = self._qa(sigma + delta_sigma_el)
+        # q_trial = StressUtils.q(sigma + delta_sigma_el)
         # determine substep size based on proximity to yield surface to prevent overshooting
-        alpha = 0.8
+        alpha = 0.9
         cutoff_ratio = 0.99
         ratio = q / qf
         q_step = alpha * qf * (1 - min(ratio, cutoff_ratio))
@@ -295,9 +309,13 @@ class HardeningSoilWithCap:
 
     def _calculate_dsigma_elastic(self, Eur, nu, deps):
         G, K = self.elastic_moduli(Eur, nu)
-        deps_v = np.trace(deps)
+
+        deps_v = np.sum(deps[:3])
+
         lame_lambda = K - 2.0 * G / 3.0
-        dsigma_elastic = 2.0 * G * deps + lame_lambda * deps_v * np.eye(3)
+
+        dsigma_elastic = 2.0 * G * deps
+        dsigma_elastic[:3] += lame_lambda * deps_v
         return dsigma_elastic
 
 
@@ -316,7 +334,7 @@ class HardeningSoilWithCap:
                                                   p_p_0):
         # Update stress and hardening variables
         sigma_curr_tmp = np.copy(sigma_trial)
-        d_eps_p = np.zeros((3,3))
+        d_eps_p = np.zeros(6)
 
         gamma_p_curr = gamma_p_0
         p_p_curr = p_p_0
@@ -340,8 +358,8 @@ class HardeningSoilWithCap:
             p_p_curr += dlambda_2 * dhdlambda_2
             d_eps_p = d_eps_p + dlambda_2 * dg_dsigma2
 
-        d_eps_p_vol  = np.trace(d_eps_p)
-
+        # d_eps_p_vol  = np.trace(d_eps_p)
+        d_eps_p_vol = d_eps_p[0] + d_eps_p[1] + d_eps_p[2]
         # p_p_curr = HardeningLaws.dpreconsolidation_stress(d_eps_p_vol,  self.nu, self.Eur_ref, self.K_ratio, p_p_0)
         # gamma_p_curr = gamma_p_0 + HardeningLaws.dgamma(d_eps_p)
 
@@ -384,8 +402,8 @@ class HardeningSoilWithCap:
 
         f_c_trial = YieldFunctions.HS_cap_F_c(sigma_trial,p_trial, p_p_trial, self.phi, self.M)
         # Check if any yielding
-
-        tol1 = abs(f_s_trial) * tol
+        tol1= tol
+        # tol1 = abs(f_s_trial) * tol
         tol2 = abs(f_c_trial) * tol
         if f_s_trial <= tol1 and f_c_trial <= tol2:
             return sigma_trial, gamma_p_trial, p_p_trial, True
@@ -396,7 +414,7 @@ class HardeningSoilWithCap:
         gamma_p_curr = gamma_p0
         p_p_curr = p_p0
 
-        d_eps_p = np.zeros((3,3))
+        d_eps_p = np.zeros(6)
 
         # initial guess for yield function values (using trial state)
         f_s_curr = f_s_trial
@@ -421,7 +439,7 @@ class HardeningSoilWithCap:
             for it in range(max_iter):
 
                 deps = deps - d_eps_p
-                d_eps_p = np.zeros((3,3))
+                d_eps_p = np.zeros(6)
 
                 # Compute necessary tensors and scalars
                 p_curr = StressUtils.p(sigma_curr)
@@ -438,22 +456,42 @@ class HardeningSoilWithCap:
                 if active_s:
                     dg_dsigma_s = YieldFunctions.drucker_prager_df_dsigma(sigma_curr, p_curr, q_curr, self.phi,self.psi, self.p_t)
                     dg_ddsigma_s = YieldFunctions.dgd_dsigma(sigma_curr,p_curr,q_curr )
-                    fourth_order_identity = np.einsum('ik,jl->ijkl', np.eye(3), np.eye(3))
-
+                    # fourth_order_identity = np.einsum('ik,jl->ijkl', np.eye(3), np.eye(3))
+                    #
                     G, K= self.elastic_moduli(Eur, self.nu)
-                    De =fourth_order_identity * K + 2 * G * (np.einsum('ik,jl->ijkl', np.eye(3), np.eye(3)) - (1/3) * np.einsum('ij,kl->ijkl', np.eye(3), np.eye(3)))
-
-                    A = fourth_order_identity + dlambda_s * np.einsum(
-                        "ijkl,klmn->ijmn",
-                        De,
-                        dg_ddsigma_s
-                    )
-
-
-                    term1 = np.linalg.inv(A.reshape(9, 9)).reshape(3, 3, 3, 3)
-                    term2 = dg_dsigma_s
+                    # De =fourth_order_identity * K + 2 * G * (np.einsum('ik,jl->ijkl', np.eye(3), np.eye(3)) - (1/3) * np.einsum('ij,kl->ijkl', np.eye(3), np.eye(3)))
+                    #
+                    # A = fourth_order_identity + dlambda_s * np.einsum(
+                    #     "ijkl,klmn->ijmn",
+                    #     De,
+                    #     dg_ddsigma_s
+                    # )
+                    #
+                    #
+                    # term1 = np.linalg.inv(A.reshape(9, 9)).reshape(3, 3, 3, 3)
+                    # term2 = dg_dsigma_s
                     De_dg_dsigma_s = self.elastic_product(dg_dsigma_s, Eur, self.nu)
+                    #
+                    # res = sigma_curr - (sigma_trial - dlambda_s * De_dg_dsigma_s)
 
+                    # --- Elastic matrix ---
+                    lame_lambda = K - 2.0 * G / 3.0
+
+                    De_voigt = np.zeros((6, 6))
+                    De_voigt[:3, :3] = lame_lambda
+                    np.fill_diagonal(De_voigt[:3, :3], lame_lambda + 2 * G)
+                    De_voigt[3:, 3:] = 2* G * np.eye(3)
+
+                    # --- A matrix ---
+                    A_voigt = np.eye(6) + dlambda_s * (De_voigt @ dg_ddsigma_s)
+                    # A_voigt = np.eye(6) + dlambda_s * De_dg_ddsigma_s
+
+                    term1 = np.linalg.inv(A_voigt)
+
+                    # --- Elastic product ---
+                    # De_dg_dsigma_s = De_voigt @ dg_dsigma_s
+
+                    # --- Residual ---
                     res = sigma_curr - (sigma_trial - dlambda_s * De_dg_dsigma_s)
 
                     dF_s_dh = YieldFunctions.d_HS_cone_dh()
@@ -463,9 +501,12 @@ class HardeningSoilWithCap:
 
                         if it > 0:
                             # dd_lambda_s = f_s_curr / (np.einsum('ij,ij', dF_s_dsigma, De_dg_dsigma_s) - dF_s_dh * dh_dlambda_s)
-                            dd_lambda_s = ((f_s_curr - np.einsum('ij,ijmn,mn->', res, term1, dF_s_dsigma))
-                                           / (np.einsum('ijkl,kl,ijmn,mn->', De, term2, term1,
-                                                        dF_s_dsigma) - dF_s_dh * dh_dlambda_s))
+
+                            dd_lambda_s = (f_s_curr- res @ (term1 @ dF_s_dsigma)) / (De_dg_dsigma_s @ (term1 @ dF_s_dsigma) - dF_s_dh * dh_dlambda_s )
+
+                            # dd_lambda_s = ((f_s_curr - np.einsum('ij,ijmn,mn->', res, term1, dF_s_dsigma))
+                            #                / (np.einsum('ijkl,kl,ijmn,mn->', De, term2, term1,
+                            #                             dF_s_dsigma) - dF_s_dh * dh_dlambda_s))
 
                             dlambda_s += dd_lambda_s
                     else:
@@ -480,7 +521,7 @@ class HardeningSoilWithCap:
                             #                / (np.einsum('ijkl,kl,ijmn,mn->', De, term2, term1,
                             #                             dF_s_dsigma) - dF_s_dh * dh_dlambda_s))
 
-                            A = np.einsum('ij,ij', dF_s_dsigma, De_dg_dsigma_s) - dF_s_dh * dh_dlambda_s
+                            A = dF_s_dsigma @ De_dg_dsigma_s - dF_s_dh * dh_dlambda_s
                             dd_lambda_s = f_s_curr / A
                             dlambda_s += dd_lambda_s
 
