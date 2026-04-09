@@ -18,6 +18,47 @@ def voigt_to_matrix(v):
     m[0,1] = m[1,0] = v[5]
     return m
 
+import numpy as np
+
+def tensor4_to_voigt6(D):
+    """
+    Convert 4th-order tensor D[i,j,k,l] (3x3x3x3)
+    to 6x6 Voigt matrix using engineering shear strain convention.
+    """
+
+    voigt_map = {
+        (0,0): 0,
+        (1,1): 1,
+        (2,2): 2,
+        (1,2): 3,
+        (2,1): 3,
+        (0,2): 4,
+        (2,0): 4,
+        (0,1): 5,
+        (1,0): 5,
+    }
+
+    Dv = np.zeros((6,6))
+
+    for i in range(3):
+        for j in range(3):
+            I = voigt_map[(i,j)]
+            for k in range(3):
+                for l in range(3):
+                    J = voigt_map[(k,l)]
+
+                    factor = 1.0
+
+                    # Apply engineering shear scaling
+                    if I >= 3:
+                        factor *= 2.0
+                    if J >= 3:
+                        factor *= 2.0
+
+                    Dv[I, J] += factor * D[i,j,k,l]
+
+    return Dv
+
 class HardeningSoilWithCap:
     """
     Hardening Soil model with cone hardening (shear) and cap hardening (volumetric).
@@ -402,8 +443,8 @@ class HardeningSoilWithCap:
 
         f_c_trial = YieldFunctions.HS_cap_F_c(sigma_trial,p_trial, p_p_trial, self.phi, self.M)
         # Check if any yielding
-        tol1= tol
-        # tol1 = abs(f_s_trial) * tol
+        # tol1= tol
+        tol1 = abs(f_s_trial) * tol
         tol2 = abs(f_c_trial) * tol
         if f_s_trial <= tol1 and f_c_trial <= tol2:
             return sigma_trial, gamma_p_trial, p_p_trial, True
