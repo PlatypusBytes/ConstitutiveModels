@@ -16,6 +16,6 @@ class StressUtils:
     def q(sigma_voigt):
 
 
-        s = sigma_voigt - StressUtils.p(sigma_voigt) * np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+        s = sigma_voigt[:3] - StressUtils.p(sigma_voigt)
         J2 = 0.5 * s @ s
         return np.sqrt(3.0 * J2)

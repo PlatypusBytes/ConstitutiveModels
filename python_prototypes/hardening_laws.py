@@ -19,7 +19,8 @@ class HardeningLaws:
         """
         # return 1
         return 2
-        # return np.sqrt(2.0 / 3.0 * np.einsum('ij,ij', dgdsigma, dgdsigma))
+        # return 3
+        # return np.sqrt(2.0 / 3.0 * np.einsum('i,i', dgdsigma, dgdsigma))
         # return 3/2
 
 

@@ -402,8 +402,8 @@ class HardeningSoilWithCap:
 
         f_c_trial = YieldFunctions.HS_cap_F_c(sigma_trial,p_trial, p_p_trial, self.phi, self.M)
         # Check if any yielding
-        tol1= tol
-        # tol1 = abs(f_s_trial) * tol
+        # tol1= tol
+        tol1 = abs(f_s_trial) * tol
         tol2 = abs(f_c_trial) * tol
         if f_s_trial <= tol1 and f_c_trial <= tol2:
             return sigma_trial, gamma_p_trial, p_p_trial, True
@@ -486,7 +486,9 @@ class HardeningSoilWithCap:
                     A_voigt = np.eye(6) + dlambda_s * (De_voigt @ dg_ddsigma_s)
                     # A_voigt = np.eye(6) + dlambda_s * De_dg_ddsigma_s
 
-                    term1 = np.linalg.inv(A_voigt)
+                    # term1 = np.linalg.inv(A_voigt)
+
+
 
                     # --- Elastic product ---
                     # De_dg_dsigma_s = De_voigt @ dg_dsigma_s
@@ -498,11 +500,12 @@ class HardeningSoilWithCap:
                     dh_dlambda_s = HardeningLaws.dh_dlambda_s(dg_dsigma_s)
                     if not self.use_mohr_coulomb:
                         dF_s_dsigma = YieldFunctions.df_dsigma_mohr_coulomb(sigma_curr, p_curr, q_curr, Ei, Eur, qa)
-
+                        Ainv_dF_s_dsigma = np.linalg.solve(A_voigt, dF_s_dsigma)
                         if it > 0:
                             # dd_lambda_s = f_s_curr / (np.einsum('ij,ij', dF_s_dsigma, De_dg_dsigma_s) - dF_s_dh * dh_dlambda_s)
+                            # dd_lambda_s = f_s_curr / (dF_s_dsigma  @ De_dg_dsigma_s - dF_s_dh * dh_dlambda_s)
 
-                            dd_lambda_s = (f_s_curr- res @ (term1 @ dF_s_dsigma)) / (De_dg_dsigma_s @ (term1 @ dF_s_dsigma) - dF_s_dh * dh_dlambda_s )
+                            dd_lambda_s = (f_s_curr- res @ (Ainv_dF_s_dsigma)) / (De_dg_dsigma_s @ (Ainv_dF_s_dsigma) - dF_s_dh * dh_dlambda_s ) * 0.5
 
                             # dd_lambda_s = ((f_s_curr - np.einsum('ij,ijmn,mn->', res, term1, dF_s_dsigma))
                             #                / (np.einsum('ijkl,kl,ijmn,mn->', De, term2, term1,
@@ -540,7 +543,7 @@ class HardeningSoilWithCap:
                                                                                                         De_dg_dsigma_s, De_dg_dsigma_c,
                                                                                                         dF_s_dh,dF_c_dh, dh_dlambda_s,dh_dlambda_c, f_s_curr, f_c_curr, active_s, active_c, dlambda_s, dlambda_c)
 
-                sigma_curr, d_eps_p, gamma_p_curr, p_p_curr = self. update_stress_and_state_2_yields_implicit(sigma_trial, active_s, active_c, dlambda_s, dlambda_c, dg_dsigma_s,
+                sigma_curr, d_eps_p, gamma_p_curr, p_p_curr = self.update_stress_and_state_2_yields_implicit(sigma_trial, active_s, active_c, dlambda_s, dlambda_c, dg_dsigma_s,
                                                                                                               dg_dsigma_c, De_dg_dsigma_s,
                                                                                                               De_dg_dsigma_c, gamma_p0,
                                                                                                               p_p0)
@@ -554,9 +557,7 @@ class HardeningSoilWithCap:
 
                 if active_s:
 
-                    q = StressUtils.q(sigma_curr)
-                    qf = self._qf(sigma_curr)
-                    qa = self._qa(sigma_curr)
+                    q = q_curr
 
                     if not self.use_mohr_coulomb:
                         f_s_curr = YieldFunctions.HS_cone_F_s(q_curr, gamma_p_curr, Ei, Eur, qa)
@@ -606,11 +607,6 @@ class HardeningSoilWithCap:
                         break
 
             q = StressUtils.q(sigma_curr)
-            qf = self._qf(sigma_curr)
-            qa = self._qa(sigma_curr)
-
-
-
 
             f_c_curr = YieldFunctions.HS_cap_F_c(sigma_curr, p_curr, p_p_curr, self.phi, self.M)
             active_s = f_s_curr > tol1

@@ -60,7 +60,7 @@ def example_triaxial_test():
         'pref': 100,
         'Rf': 0.9,
         'nu': 0.25,
-        'M': M,  # cap shape parameter
+        'M': M2,  # cap shape parameter
         'k0nc': k0nc,
         'K_ratio': bulk_stiffness_ratio
     }
@@ -168,60 +168,60 @@ if __name__ == "__main__":
 
 
     import cProfile
+
+    cProfile.run('example_triaxial_test()', "hs_profile")
+
+    import pstats
+
+    p = pstats.Stats("hs_profile")
+    p.strip_dirs().sort_stats("time").print_stats(20)
+
     #
-    # cProfile.run('example_triaxial_test()', "hs_profile")
-
-    # import pstats
-
-    # p = pstats.Stats("hs_profile")
-    # p.strip_dirs().sort_stats("time").print_stats(20)
-
-
+    # #
+    # np_strains, np_stresses, np_stiffnesses= example_triaxial_test()
     #
-    np_strains, np_stresses, np_stiffnesses= example_triaxial_test()
-
-    q = np.sqrt(3/2 * ((np_stresses[:,0] - np_stresses[:,1])**2 + (np_stresses[:,1] - np_stresses[:,2])**2 + (np_stresses[:,2] - np_stresses[:,0])**2))
-    p = (np_stresses[:,0] + np_stresses[:,1] + np_stresses[:,2]) / 3
-
-    import matplotlib.pyplot as plt
-
-    plt.figure(figsize=(12, 4))
-
-    plt.subplot(1, 5, 1)
-    # plt.plot(axial_strain, deviator_stress, 'b-')
-    plt.plot(np_strains[:,0], np_stresses[:,0]/np_stresses[:,2], 'b-')
-    # plt.ylim([1,6])
-    plt.xlabel('Axial strain')
-    plt.ylabel('sigma1/sigma3 (-)')
-    plt.title('Stress‑strain')
-
-    plt.subplot(1, 5, 2)
-    plt.plot(p, q,marker='o')
-    plt.xlabel('mean stress p (kPa)')
-    plt.ylabel('Deviator stress q (kPa)')
-
-    plt.subplot(1, 5, 3)
-    plt.plot(np_stresses[:,0], label='sigma1')
-    plt.plot(np_stresses[:,1], label='sigma2')
-    plt.plot(np_stresses[:,2], label='sigma3')
-    plt.xlabel('Time step')
-    plt.ylabel('Stress (kPa)')
-    plt.title('Stress components')
-    plt.legend()
-
-    plt.subplot(1, 5, 4)
-    plt.plot(np_strains[:,0],label='eps1')
-    plt.plot(np_strains[:,1],label='eps2')
-    plt.plot(np_strains[:,2],label='eps3')
-    plt.xlabel('Time step')
-    plt.ylabel('Strain')
-    plt.title('Strain components')
-    plt.legend()
-
-    plt.subplot(1, 5, 5)
-    plt.plot(np_strains[:,0], np_stiffnesses, 'b-')
-    plt.xlabel('Axial strain')
-    plt.ylabel('Axial stiffness (kPa)')
-    plt.title('Axial stiffness vs axial strain')
-
-    plt.show()
+    # q = np.sqrt(3/2 * ((np_stresses[:,0] - np_stresses[:,1])**2 + (np_stresses[:,1] - np_stresses[:,2])**2 + (np_stresses[:,2] - np_stresses[:,0])**2))
+    # p = (np_stresses[:,0] + np_stresses[:,1] + np_stresses[:,2]) / 3
+    #
+    # import matplotlib.pyplot as plt
+    #
+    # plt.figure(figsize=(12, 4))
+    #
+    # plt.subplot(1, 5, 1)
+    # # plt.plot(axial_strain, deviator_stress, 'b-')
+    # plt.plot(np_strains[:,0], np_stresses[:,0]/np_stresses[:,2], 'b-')
+    # # plt.ylim([1,6])
+    # plt.xlabel('Axial strain')
+    # plt.ylabel('sigma1/sigma3 (-)')
+    # plt.title('Stress‑strain')
+    #
+    # plt.subplot(1, 5, 2)
+    # plt.plot(p, q,marker='o')
+    # plt.xlabel('mean stress p (kPa)')
+    # plt.ylabel('Deviator stress q (kPa)')
+    #
+    # plt.subplot(1, 5, 3)
+    # plt.plot(np_stresses[:,0], label='sigma1')
+    # plt.plot(np_stresses[:,1], label='sigma2')
+    # plt.plot(np_stresses[:,2], label='sigma3')
+    # plt.xlabel('Time step')
+    # plt.ylabel('Stress (kPa)')
+    # plt.title('Stress components')
+    # plt.legend()
+    #
+    # plt.subplot(1, 5, 4)
+    # plt.plot(np_strains[:,0],label='eps1')
+    # plt.plot(np_strains[:,1],label='eps2')
+    # plt.plot(np_strains[:,2],label='eps3')
+    # plt.xlabel('Time step')
+    # plt.ylabel('Strain')
+    # plt.title('Strain components')
+    # plt.legend()
+    #
+    # plt.subplot(1, 5, 5)
+    # plt.plot(np_strains[:,0], np_stiffnesses, 'b-')
+    # plt.xlabel('Axial strain')
+    # plt.ylabel('Axial stiffness (kPa)')
+    # plt.title('Axial stiffness vs axial strain')
+    #
+    # plt.show()
