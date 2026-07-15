@@ -1,7 +1,5 @@
 
 import numpy as np
-import warnings
-from python_prototypes.stress_utils import StressUtils
 
 class YieldFunctions:
 
@@ -42,13 +40,37 @@ class YieldFunctions:
         return -1
 
     @staticmethod
-    def HS_cap_F_c(sigma,p, p_p, phi, M):
-        """Cap yield function."""
+    def dq_dsigma(sigma, p, q):
+        """
+        Derivative of the von Mises equivalent stress q with respect to the
+        stress tensor, expressed in engineering Voigt notation.
 
+        For a scalar function of stress, the energy-conjugate Voigt gradient
+        carries a factor 2 on the shear components so that plain Voigt dot
+        products (e.g. dF/dsigma . De . dg/dsigma) reproduce the correct tensor
+        contraction.
+        """
+        if q < 1e-12:
+            return np.zeros(6)
+        s = sigma - p * np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+        dq = (3.0 / (2.0 * q)) * s
+        dq[3:] *= 2.0  # engineering shear factor
+        return dq
+
+    @staticmethod
+    def HS_cap_F_c(sigma, p, p_p, phi, M):
+        """
+        Cap (volumetric) yield function.
+
+        Elliptic cap in the p-q~ plane:
+            F_c = (q~ / M)^2 + p^2 - p_p^2
+        where q~ is the special deviatoric measure used in the Hardening Soil
+        model and p_p is the pre-consolidation pressure (cap size).
+        """
         alpha = (3 + np.sin(phi)) / (3 - np.sin(phi))  # cap shape parameter
         q_special = sigma[0] + (alpha - 1) * sigma[1] - alpha * sigma[2]
 
-        return (q_special / M) ** 2 - p ** 2 - p_p ** 2
+        return (q_special / M) ** 2 + p ** 2 - p_p ** 2
 
 
     @staticmethod
@@ -57,19 +79,22 @@ class YieldFunctions:
         return -2 * p_p
 
     @staticmethod
-    def cap_df_dsigma( sigma, p, q, M):
-        """Associated flow direction for cap."""
-        # dp = 2.0 * (p + self.p_t)
-        dp = -2.0 * p
-        if q < 1e-12:
-            # Isotropic stress state: only volumetric part
-            return (dp / 3.0) * np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
-        s = sigma - p * np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
-        dq = 2.0 * q / (M**2)
-        # ∂q/∂σ = (3/2) s/q
-        dq_dsigma = (3.0/2.0) * s / q
-        dfdsigma = (dp / 3.0) * np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0]) + dq * dq_dsigma
-        return dfdsigma
+    def cap_df_dsigma(sigma, p, q, M, phi):
+        """
+        Gradient of the cap yield function (associated flow) with respect to the
+        stress, consistent with ``HS_cap_F_c``:
+
+            F_c = (q~ / M)^2 + p^2 - p_p^2
+
+        with q~ = s0 + (alpha - 1) s1 - alpha s2 and p = tr(sigma)/3.
+        """
+        alpha = (3 + np.sin(phi)) / (3 - np.sin(phi))
+        q_special = sigma[0] + (alpha - 1) * sigma[1] - alpha * sigma[2]
+
+        dq_special = np.array([1.0, alpha - 1.0, -alpha, 0.0, 0.0, 0.0])
+        dp_dsigma = (1.0 / 3.0) * np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+
+        return (2.0 * q_special / M ** 2) * dq_special + 2.0 * p * dp_dsigma
 
 
     @staticmethod
@@ -87,6 +112,9 @@ class YieldFunctions:
 
         eta = q / (p + p_t)
         sin_phi_mob = 3.0 * eta / (6.0 + eta)
+        # Guard against round-off / large-eta states pushing the argument of
+        # arcsin outside its valid [-1, 1] domain.
+        sin_phi_mob = np.clip(sin_phi_mob, -1.0, 1.0)
 
 
         sin_phi = np.sin(phi)
@@ -106,11 +134,11 @@ class YieldFunctions:
 
         M = YieldFunctions.mohr_coulomb_to_drucker_prager(sin_psi_mob, 0)[0]
 
-        s = sigma - p * np.array([1,1,1,0,0,0])
-
-        # dgdsigma = np.zeros((3,3))
-        dgdsigma = 3.0 * s / (2*q) - M * (1/3)
-
+        # Deviatoric part (engineering Voigt gradient of q) minus the
+        # volumetric part applied to the identity vector only.
+        dq_dsigma = YieldFunctions.dq_dsigma(sigma, p, q)
+        identity = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+        dgdsigma = dq_dsigma - (M / 3.0) * identity
 
         return dgdsigma
 
@@ -176,32 +204,24 @@ class YieldFunctions:
     @staticmethod
     def df_dsigma_mohr_coulomb(sigma,p, q, Ei, Eur, qa):
         """
-        Compute the derivative of the Mohr-Coulomb plastic potential with respect to the stress tensor.
+        Gradient of the Hardening Soil cone (shear) yield function with respect
+        to the stress tensor, in engineering Voigt notation.
 
-        :param sigma:  Stress tensor (3x3 numpy array)
+        :param sigma:  Stress vector (engineering Voigt)
         :param Ei:  Primary loading stiffness
         :param Eur:  Unloading/reloading stiffness
         :param qa:  Asymptotic deviator stress
-        :return:  Derivative of the plastic potential with respect to the stress tensor (3x3 numpy array)
+        :return:  Gradient of the yield function w.r.t. stress (6-vector)
         """
         if q < 1e-12:
-            return np.zeros((3, 3))
+            return np.zeros(6)
 
-
-        s = sigma - p * np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
-
-        q = StressUtils.q(sigma)
-        dq_dsigma = (3.0 / 2.0) * s / q
-        # dq_dsigma = np.zeros((3,3))
-        # dq_dsigma[0,0] = 1.0
-        # dq_dsigma[2,2] = -0.5
-        # dq_dsigma[2,2] = -0.5
-
+        dq_dsigma = YieldFunctions.dq_dsigma(sigma, p, q)
 
         denom = 1.0 - q / qa
         if denom <= 1e-12:
             denom = 1e-12
 
-        dF_dq1 = 2.0 / (Ei * denom ** 2) - 2.0 / Eur
+        dF_dq = 2.0 / (Ei * denom ** 2) - 2.0 / Eur
 
-        return dF_dq1 * dq_dsigma
+        return dF_dq * dq_dsigma

@@ -176,12 +176,14 @@ class HardeningSoilWithCap:
         return G, K
 
     def elastic_product(self, dqdsigma, Eur, nu):
-        """Compute De : m (tensor)."""
+        """Compute De : m (engineering Voigt vector)."""
         G, K = self.elastic_moduli(Eur, nu)
         trace_dqdsigma = dqdsigma[0] + dqdsigma[1] + dqdsigma[2]
-        # trace_dqdsigma = np.trace(dqdsigma)
         lame_lambda = K - 2.0 * G / 3.0
-        return 2.0 * G * dqdsigma + lame_lambda * trace_dqdsigma * np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+        res = np.empty(6)
+        res[:3] = 2.0 * G * dqdsigma[:3] + lame_lambda * trace_dqdsigma
+        res[3:] = G * dqdsigma[3:]
+        return res
 
 
 
@@ -207,17 +209,13 @@ class HardeningSoilWithCap:
         self.gamma_p =  term / Ei - 2 * q / self._Eur(sigma0)
 
         if p_p0 is None:
-            # Place cap just outside current stress to start elastically
+            # Size the cap so the current stress lies on it (F_c = 0), i.e.
+            #   p_p^2 = (q~/M)^2 + p0^2   for   F_c = (q~/M)^2 + p^2 - p_p^2
             p0 = StressUtils.p(sigma0)
-            q0 = StressUtils.q(sigma0)
-            # Ensure F_c <= 0
-            # rhs = np.sqrt((q0/self.M)**2 + (p0 + self.p_t)**2) - self.p_t
-            fact = (q0 / self.M)**2  - (p0) ** 2
-            if fact <= 0:
-                self.p_p = 1.0  # small positive value to ensure we start inside the cap
-            else:
-                rhs = np.sqrt((q0 / self.M)**2  - (p0) ** 2)
-                self.p_p = max(rhs, 1.0)  # at least a small positive value
+            alpha = (3.0 + np.sin(self.phi)) / (3.0 - np.sin(self.phi))
+            q_special0 = sigma0[0] + (alpha - 1.0) * sigma0[1] - alpha * sigma0[2]
+            rhs = np.sqrt((q_special0 / self.M) ** 2 + p0 ** 2)
+            self.p_p = max(rhs, 1.0)  # at least a small positive value
         else:
             self.p_p = p_p0
         self.initialized = True
@@ -314,8 +312,11 @@ class HardeningSoilWithCap:
 
         lame_lambda = K - 2.0 * G / 3.0
 
-        dsigma_elastic = 2.0 * G * deps
-        dsigma_elastic[:3] += lame_lambda * deps_v
+        dsigma_elastic = np.empty(6)
+        # Normal components: lambda * tr(eps) + 2G * eps
+        dsigma_elastic[:3] = 2.0 * G * deps[:3] + lame_lambda * deps_v
+        # Shear components: G * gamma (engineering shear strains)
+        dsigma_elastic[3:] = G * deps[3:]
         return dsigma_elastic
 
 
@@ -426,6 +427,12 @@ class HardeningSoilWithCap:
 
         converged = False
 
+        # Guard against unbound references if the inner loop does not execute.
+        it = 0
+        p_curr = StressUtils.p(sigma_curr)
+        q_curr = StressUtils.q(sigma_curr)
+        q = q_curr
+
         for i in range(2):
             # first only check 1 surface, then both.
             if i == 0 and active_s:
@@ -480,7 +487,7 @@ class HardeningSoilWithCap:
                     De_voigt = np.zeros((6, 6))
                     De_voigt[:3, :3] = lame_lambda
                     np.fill_diagonal(De_voigt[:3, :3], lame_lambda + 2 * G)
-                    De_voigt[3:, 3:] = 2* G * np.eye(3)
+                    De_voigt[3:, 3:] = G * np.eye(3)
 
                     # --- A matrix ---
                     A_voigt = np.eye(6) + dlambda_s * (De_voigt @ dg_ddsigma_s)
@@ -529,9 +536,9 @@ class HardeningSoilWithCap:
                             dlambda_s += dd_lambda_s
 
                 if active_c:
-                    dg_dsigma_c = YieldFunctions.cap_df_dsigma(sigma_curr,p_curr, q_curr, self.M)
+                    dg_dsigma_c = YieldFunctions.cap_df_dsigma(sigma_curr,p_curr, q_curr, self.M, self.phi)
                     De_dg_dsigma_c = self.elastic_product(dg_dsigma_c, Eur, self.nu)
-                    dF_c_dsigma = YieldFunctions.cap_df_dsigma(sigma_curr,p_curr, q_curr, self.M)
+                    dF_c_dsigma = YieldFunctions.cap_df_dsigma(sigma_curr,p_curr, q_curr, self.M, self.phi)
 
                     dF_c_dh = YieldFunctions.d_HS_cap_dh(p_p_curr)
                     dh_dlambda_c = HardeningLaws.dh_dlambda_c(sigma_curr, self.Eur_ref, self.nu, self.m, self.pref,

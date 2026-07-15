@@ -32,7 +32,6 @@ class ConstitutiveModelUtils:
         if active_1:
             # ∂F_s/∂σ : De : m_s
             a_11 = dFdsigma1 @ De_dg_dsigma1
-            # a_11 = np.einsum('ij,ij', dFdsigma1, De_dg_dsigma1)
             # ∂F_s/∂γ_p * h_s
             a_11 -= dFdh1 * dhdlambda1
 
@@ -40,16 +39,16 @@ class ConstitutiveModelUtils:
             rhs[0] = F1
 
             if active_2:
-                a_12 = np.einsum('ij,ij', dFdsigma1, De_dg_dsigma2)
+                a_12 = dFdsigma1 @ De_dg_dsigma2
                 A[0, 1] = a_12
 
 
         if active_2:
             if active_1:
-                a_21 = np.einsum('ij,ij', dFdsigma2, De_dg_dsigma1)
+                a_21 = dFdsigma2 @ De_dg_dsigma1
                 A[1, 0] = a_21
 
-            a_22 = np.einsum('ij,ij', dFdsigma2, De_dg_dsigma2)
+            a_22 = dFdsigma2 @ De_dg_dsigma2
             # ∂F_c/∂p_p * h_c
             a_22 -= dFdh2 * dhdlambda2
             A[1, 1] = a_22

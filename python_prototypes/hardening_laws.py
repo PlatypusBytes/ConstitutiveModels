@@ -26,10 +26,9 @@ class HardeningLaws:
 
     @staticmethod
     def dgamma(eps_plastic):
-        """Calculate the equivalent plastic strain increment dγ from the plastic strain increment tensor."""
-        # For J2 plasticity, we can use the following formula:
-        # dγ = sqrt(2/3 * eps_plastic:eps_plastic)
-        return np.sqrt(2.0 / 3.0 * np.einsum('ij,ij', eps_plastic, eps_plastic))
+        """Calculate the equivalent plastic strain increment dγ from the plastic strain increment vector."""
+        # dγ = sqrt(2/3 * eps_plastic : eps_plastic), Voigt-safe.
+        return np.sqrt(2.0 / 3.0 * np.dot(eps_plastic, eps_plastic))
 
     @staticmethod
     def dpreconsolidation_stress(eps_vol_plastic,  nu, Eu_ref, K_ratio, p0):
@@ -45,7 +44,7 @@ class HardeningLaws:
         strain hardening as written in Sloan et al 2001 (written in terms of invariants)
         (J2 hardening law)
         """
-        return np.sqrt(2.0 /3.0 * np.einsum('ij,ij', dgdsigma, dgdsigma))
+        return np.sqrt(2.0 / 3.0 * np.dot(dgdsigma, dgdsigma))
 
     @staticmethod
     def dh_dlambda_c(sigma, Eu_ref, nu, m, pref, p_t, K_ratio):
@@ -59,7 +58,7 @@ class HardeningLaws:
         Ks = Eu_ref / (3.0 * (1.0 - 2.0 * nu))
         H = (1/(K_ratio-1)) * Ks
 
-        return 2*H *((sigma[2,2] + p_t)/(pref + p_t))**m * p
+        return 2*H *((sigma[2] + p_t)/(pref + p_t))**m * p
 
     @staticmethod
     def maximum_gamma_p(q, qa, Ei, Eur):
