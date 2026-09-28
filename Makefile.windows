@@ -35,7 +35,10 @@ LIB_DIR = $(BUILD_DIR)\lib
 C_MODELS_DIR = c_models
 ELASTIC_LAWS_DIR = $(C_MODELS_DIR)\elastic_laws
 LINEAR_ELASTIC_TENS_DIR = $(C_MODELS_DIR)\linear_elastic_with_vertical_tens_cutoff
+LINEAR_ELASTIC_TENS_2D_INTERFACE_DIR = $(C_MODELS_DIR)\linear_elastic_with_vertical_tens_cutoff_2d_interface
+LINEAR_ELASTIC_TENS_3D_INTERFACE_DIR = $(C_MODELS_DIR)\linear_elastic_with_vertical_tens_cutoff_3d_interface
 MATSUOKA_NAKAI_DIR = $(C_MODELS_DIR)\matsuoka_nakai
+VISCOELASTIC_KELVIN_VOIGT_DIR = $(C_MODELS_DIR)\viscoelastic_kelvin_voigt
 HARDENING_SOIL_DIR = $(C_MODELS_DIR)\hardening_soil
 YIELD_SURFACES_DIR = $(C_MODELS_DIR)\yield_surfaces
 
@@ -51,6 +54,11 @@ COMMON_OBJS = \
 
 # Target shared libraries
 LIBS = \
+    $(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff$(SO_EXT) \
+    $(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff_2d_interface$(SO_EXT) \
+    $(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff_3d_interface$(SO_EXT) \
+	$(LIB_DIR)\matsuoka_nakai$(SO_EXT) \
+	$(LIB_DIR)\viscoelastic_kelvin_voigt$(SO_EXT)
 	$(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff$(SO_EXT) \
 	$(LIB_DIR)\matsuoka_nakai$(SO_EXT) \
 	$(LIB_DIR)\hardening_soil$(SO_EXT)
@@ -82,6 +90,9 @@ $(BUILD_DIR)\stress_utils$(OBJ_EXT): $(C_MODELS_DIR)\stress_utils.c $(C_MODELS_D
 $(BUILD_DIR)\hookes_law$(OBJ_EXT): $(ELASTIC_LAWS_DIR)\hookes_law.c $(ELASTIC_LAWS_DIR)\hookes_law.h
 	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(ELASTIC_LAWS_DIR)\hookes_law.c
 
+$(BUILD_DIR)\viscoelastic_kelvin_voigt$(OBJ_EXT): $(VISCOELASTIC_KELVIN_VOIGT_DIR)\viscoelastic_kelvin_voigt.c
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(VISCOELASTIC_KELVIN_VOIGT_DIR)\viscoelastic_kelvin_voigt.c
+
 # Matsuoka-Nakai yield surface
 $(BUILD_DIR)\matsuoka_nakai_surface$(OBJ_EXT): $(YIELD_SURFACES_DIR)\matsuoka_nakai_surface.c $(YIELD_SURFACES_DIR)\matsuoka_nakai_surface.h
 	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(YIELD_SURFACES_DIR)\matsuoka_nakai_surface.c
@@ -89,6 +100,14 @@ $(BUILD_DIR)\matsuoka_nakai_surface$(OBJ_EXT): $(YIELD_SURFACES_DIR)\matsuoka_na
 # Linear elastic with vertical tension cutoff model
 $(BUILD_DIR)\linear_elastic_with_vertical_tens_cutoff$(OBJ_EXT): $(LINEAR_ELASTIC_TENS_DIR)\linear_elastic_with_vertical_tens_cutoff.c
 	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(LINEAR_ELASTIC_TENS_DIR)\linear_elastic_with_vertical_tens_cutoff.c
+
+# Linear elastic with vertical tension cutoff model for 2d interface
+$(BUILD_DIR)\linear_elastic_with_vertical_tens_cutoff_2d_interface$(OBJ_EXT): $(LINEAR_ELASTIC_TENS_2D_INTERFACE_DIR)\linear_elastic_with_vertical_tens_cutoff_2d_interface.c
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(LINEAR_ELASTIC_TENS_2D_INTERFACE_DIR)\linear_elastic_with_vertical_tens_cutoff_2d_interface.c
+
+# Linear elastic with vertical tension cutoff model for 3d interface
+$(BUILD_DIR)\linear_elastic_with_vertical_tens_cutoff_3d_interface$(OBJ_EXT): $(LINEAR_ELASTIC_TENS_3D_INTERFACE_DIR)\linear_elastic_with_vertical_tens_cutoff_3d_interface.c
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(LINEAR_ELASTIC_TENS_3D_INTERFACE_DIR)\linear_elastic_with_vertical_tens_cutoff_3d_interface.c
 
 # Matsuoka-Nakai model
 $(BUILD_DIR)\matsuoka_nakai$(OBJ_EXT): $(MATSUOKA_NAKAI_DIR)\matsuoka_nakai.c
@@ -106,6 +125,9 @@ $(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff$(SO_EXT): $(COMMON_OBJS) $(B
 	$(CC) $(LDFLAGS) /Fe$@ $**
 
 $(LIB_DIR)\matsuoka_nakai$(SO_EXT): $(COMMON_OBJS) $(BUILD_DIR)\matsuoka_nakai_surface$(OBJ_EXT) $(BUILD_DIR)\matsuoka_nakai$(OBJ_EXT)
+	$(CC) $(LDFLAGS) /Fe$@ $**
+
+$(LIB_DIR)\viscoelastic_kelvin_voigt$(SO_EXT): $(COMMON_OBJS) $(BUILD_DIR)\viscoelastic_kelvin_voigt$(OBJ_EXT)
 	$(CC) $(LDFLAGS) /Fe$@ $**
 
 # Hardening Soil needs globals, utils, stress_utils (principal stresses) and hookes_law

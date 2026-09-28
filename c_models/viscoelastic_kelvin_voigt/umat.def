@@ -1,0 +1,3 @@
+LIBRARY viscoelastic_kelvin_voigt
+EXPORTS
+    umat @1

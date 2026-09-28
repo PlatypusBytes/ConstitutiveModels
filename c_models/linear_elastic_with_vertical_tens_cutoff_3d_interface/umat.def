@@ -1,0 +1,3 @@
+LIBRARY linear_elastic_with_vertical_tens_cutoff_3d_interface
+EXPORTS
+    umat @1

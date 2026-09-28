@@ -8,7 +8,9 @@ With Fortran ordering (Column major):
 - Mohr-Coulomb with tension cutoff (Hans Teunissen implementation)
 
 With C ordering (Row major):
-- Linear Elastic with tension cutoff in normal direction 
+- Linear Elastic with tension cutoff in vertical direction 
+- Linear Elastic with tension cutoff in normal direction for 2D interface elements
+- Linear Elastic with tension cutoff in normal direction for 3D interface elements
 - Matsuoka-Nakai 
 
 
