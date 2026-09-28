@@ -8,7 +8,7 @@ tension positive (Abaqus convention); run_umat converts.
 PROPS = [E50_ref, Eur_ref, m, c, phi_deg, psi_deg, p_ref, Rf, nu, M_cap, K_ratio]
 STATEV = [gamma_p, p_p, at_failure]
 
-The lateral (confining) stress is held constant with a small Newton loop on the
+The lateral (confining) stress is held constant with a small secant loop on the
 lateral strain, which is far more robust than the fixed-point stress control and
 lets the model harden all the way to Mohr-Coulomb failure.
 """
@@ -74,21 +74,26 @@ def run_triaxial_c(cell_pressure=600.0, total_axial_strain=0.10, n_time_steps=50
 
     e = 0.0  # lateral strain increment (warm-started between steps)
     for t in range(n_time_steps):
-        # Newton on the (symmetric) lateral strain so that the lateral stress
-        # returns to `cell_pressure`, with the derivative D[1,1] + D[1,2] of the
-        # tangent returned by the UMAT.
-        ddsdde = None
+        # Secant iteration on the (symmetric) lateral strain so that the lateral
+        # stress returns to `cell_pressure`. The first iteration uses the
+        # derivative D[1,1] + D[1,2] of the tangent returned by the UMAT.
+        e_prev, r_prev = None, None
         for _ in range(80):
             ds = np.array([d_axial, e, e, 0.0, 0.0, 0.0])
-            s_try, ddsdde, _ = run_umat(dll, stress, statev.copy(), strain, ds, props, t)
+            s_try, ddsdde, statev_try = run_umat(dll, stress, statev.copy(), strain, ds, props, t)
             r = s_try[1] - cell_pressure
-            deriv = ddsdde[1, 1] + ddsdde[1, 2]
-            if abs(r) < 1e-6 or deriv < 1e-9:
+            if abs(r) < 1e-6:
                 break
+            if r_prev is not None and r != r_prev:
+                deriv = (r - r_prev) / (e - e_prev)
+            else:
+                deriv = ddsdde[1, 1] + ddsdde[1, 2]
+            if deriv < 1e-9:
+                break
+            e_prev, r_prev = e, r
             e -= r / deriv
 
-        ds = np.array([d_axial, e, e, 0.0, 0.0, 0.0])
-        stress, ddsdde, statev = run_umat(dll, stress, statev.copy(), strain, ds, props, t)
+        stress, statev = s_try, statev_try
         strain = strain + ds
 
         if np.any(np.isnan(stress)):

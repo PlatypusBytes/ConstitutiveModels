@@ -1,77 +1,21 @@
+"""
+Python counterpart of c_models/hardening_rules/hyperbolic_shear_hardening.c and cap_hardening.c.
+"""
 
-import numpy as np
-
-from python_prototypes.stress_utils import StressUtils
 
 class HardeningLaws:
 
+    @staticmethod
+    def hyperbolic_plastic_shear_strain(q, qa, Ei, Eur):
+        """Plastic shear strain gamma_p on the hyperbola at deviator q (Eq. 8 with f = 0)."""
+        return 2.0 / Ei * q / (1.0 - q / qa) - 2.0 * q / Eur
 
     @staticmethod
-    def dh_dlambda_s(dgdsigma):
-        """
-
-        hardening law according to Benz
-
-        d_gamma_p/ dlambda_s = sqrt(1/2 (dgdsigma1 - dgdsigma2)**2 + (dgdsigma2 - dgdsigma3)**2 + (dgdsigma3 - dgdsigma1)**2)) = 3/2
-
-        :param dh_dlambda_s:
-        :return:
-        """
-        # return 1
-        return 2
-        # return 3
-        # return np.sqrt(2.0 / 3.0 * np.einsum('i,i', dgdsigma, dgdsigma))
-        # return 3/2
-
+    def hyperbolic_initial_stiffness(E50, Rf):
+        """Initial stiffness Ei such that E50 is the secant stiffness at q = qf / 2 (Sec. 2.1)."""
+        return 2.0 * E50 / (2.0 - Rf)
 
     @staticmethod
-    def dgamma(eps_plastic):
-        """Calculate the equivalent plastic strain increment dγ from the plastic strain increment vector."""
-        # dγ = sqrt(2/3 * eps_plastic : eps_plastic), Voigt-safe.
-        return np.sqrt(2.0 / 3.0 * np.dot(eps_plastic, eps_plastic))
-
-    @staticmethod
-    def dpreconsolidation_stress(eps_vol_plastic,  nu, Eu_ref, K_ratio, p0):
-
-        Ks = Eu_ref / (3.0 * (1.0 - 2.0 * nu))
-        H = (1/(K_ratio-1)) * Ks
-
-        return p0 * np.exp(-H * eps_vol_plastic)
-
-    @staticmethod
-    def j2_dh_dlambda_s(dgdsigma):
-        """dγ_p/dλ_s = sqrt(2/3 dgdsigma:dgdsigma)
-        strain hardening as written in Sloan et al 2001 (written in terms of invariants)
-        (J2 hardening law)
-        """
-        return np.sqrt(2.0 / 3.0 * np.dot(dgdsigma, dgdsigma))
-
-    @staticmethod
-    def dh_dlambda_c(sigma, Eu_ref, nu, m, pref, p_t, K_ratio):
-        """
-        hardening cap law according to Benz
-        :return:
-        """
-
-        p = StressUtils.p(sigma)
-
-        Ks = Eu_ref / (3.0 * (1.0 - 2.0 * nu))
-        H = (1/(K_ratio-1)) * Ks
-
-        return 2*H *((sigma[2] + p_t)/(pref + p_t))**m * p
-
-    @staticmethod
-    def maximum_gamma_p(q, qa, Ei, Eur):
-
-
-        gamma_p = 2*q/Ei * qa/(qa-q) - 2*q/Eur
-
-        return gamma_p
-
-
-
-
-
-
-
-
+    def cap_hardening_modulus(Ks, K_ratio):
+        """Cap hardening modulus H = Ks Kc / (Ks - Kc) = Ks / (Ks/Kc - 1) (Eq. 32)."""
+        return Ks / (K_ratio - 1.0)
