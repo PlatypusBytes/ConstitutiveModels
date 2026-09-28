@@ -3,7 +3,8 @@ Run a drained triaxial compression test with the C Hardening Soil UMAT and
 reproduce the same 5-panel figure as run_hardening_soil.py, but driven by the
 compiled C model (build_C/lib/hardening_soil.dll).
 
-Convention: compression positive, Voigt [xx, yy, zz, xy, yz, xz].
+Convention: compression positive, Voigt [xx, yy, zz, xy, yz, xz]. The UMAT interface is
+tension positive (Abaqus convention); run_umat converts.
 PROPS = [E50_ref, Eur_ref, m, c, phi_deg, psi_deg, p_ref, Rf, nu, M_cap, K_ratio]
 STATEV = [gamma_p, p_p, at_failure]
 
@@ -39,17 +40,25 @@ def ensure_dll():
         os.path.join(root, "c_models", "hardening_soil", "hardening_soil.c"),
         os.path.join(root, "c_models", "globals.c"),
         os.path.join(root, "c_models", "utils.c"),
+        os.path.join(root, "c_models", "stress_utils.c"),
         os.path.join(root, "c_models", "elastic_laws", "hookes_law.c"),
     ]
     subprocess.run(["gcc", "-O2", "-shared", "-o", path, *sources, "-lm"], check=True)
     return path
 
 
-def run_triaxial_c(cell_pressure=300.0, total_axial_strain=0.10, n_time_steps=50):
+def run_umat(dll, stress, statev, strain, dstrain, props, time_step):
+    """UMAT call with compression-positive stresses and strains (the UMAT is tension positive)."""
+    stress_new, ddsdde, statev_new = Utils.run_c_umat(dll, -stress, statev, -strain, -dstrain, props,
+                                                      time_step)
+    return -stress_new, ddsdde, statev_new
+
+
+def run_triaxial_c(cell_pressure=600.0, total_axial_strain=0.10, n_time_steps=50):
     dll = ensure_dll()
 
-    # E50_ref, Eur_ref, m, c, phi, psi, p_ref, Rf, nu, M_cap, K_ratio
-    props = [30000.0, 3 * 30000.0, 0.55, 0.0, 42.0, 16.0, 100.0, 0.9, 0.25, 1.5, 1.84]
+    # E50_ref, Eur_ref, m, c, phi, psi, p_ref, Rf, nu, M_cap, K_ratio e0, ecv
+    props = [30000, 3 * 30000, 0.55, 0.0, 42, 16, 100.0, 0.85, 0.25, 1.5, 1.84, 0.63, 1]
 
     stress = np.array([cell_pressure, cell_pressure, cell_pressure, 0.0, 0.0, 0.0])
     statev = np.array([0.0, 0.0, 0.0])
@@ -59,16 +68,19 @@ def run_triaxial_c(cell_pressure=300.0, total_axial_strain=0.10, n_time_steps=50
 
     stresses, strains, stiffnesses = [], [], []
 
+    import time
+
+    tim = time.time()
+
     e = 0.0  # lateral strain increment (warm-started between steps)
     for t in range(n_time_steps):
-        # Modified-Newton on the (symmetric) lateral strain so that the lateral
-        # stress returns to `cell_pressure`. The derivative uses the elastic
-        # tangent (D[1,1] + D[1,2]) which is always stiff and positive, so the
-        # iteration is stable even as the material approaches failure.
+        # Newton on the (symmetric) lateral strain so that the lateral stress
+        # returns to `cell_pressure`, with the derivative D[1,1] + D[1,2] of the
+        # tangent returned by the UMAT.
         ddsdde = None
         for _ in range(80):
             ds = np.array([d_axial, e, e, 0.0, 0.0, 0.0])
-            s_try, ddsdde, _ = Utils.run_c_umat(dll, stress, statev.copy(), strain, ds, props, t)
+            s_try, ddsdde, _ = run_umat(dll, stress, statev.copy(), strain, ds, props, t)
             r = s_try[1] - cell_pressure
             deriv = ddsdde[1, 1] + ddsdde[1, 2]
             if abs(r) < 1e-6 or deriv < 1e-9:
@@ -76,7 +88,7 @@ def run_triaxial_c(cell_pressure=300.0, total_axial_strain=0.10, n_time_steps=50
             e -= r / deriv
 
         ds = np.array([d_axial, e, e, 0.0, 0.0, 0.0])
-        stress, ddsdde, statev = Utils.run_c_umat(dll, stress, statev.copy(), strain, ds, props, t)
+        stress, ddsdde, statev = run_umat(dll, stress, statev.copy(), strain, ds, props, t)
         strain = strain + ds
 
         if np.any(np.isnan(stress)):
@@ -85,6 +97,8 @@ def run_triaxial_c(cell_pressure=300.0, total_axial_strain=0.10, n_time_steps=50
         stresses.append(stress.copy())
         strains.append(strain.copy())
         stiffnesses.append(ddsdde[0, 0])
+
+    print(f"Completed {n_time_steps} steps in {time.time() - tim:.2f} seconds.")
 
     return np.array(strains), np.array(stresses), np.array(stiffnesses)
 

@@ -6,7 +6,7 @@ double calculate_determinant_voigt_vector_3d(const double vector[VOIGTSIZE_3D])
     // Calculate the determinant of a 3x3 matrix represented as a Voigt vector
     // vector = [sxx, syy, szz, sxy, syz, sxz]
     double det = 0.0;
-    det = vector[XX] * (vector[YY] * vector[ZZ] - vector[XY] * vector[XY]) -
+    det = vector[XX] * (vector[YY] * vector[ZZ] - vector[YZ] * vector[YZ]) -
           vector[XY] * (vector[XY] * vector[ZZ] - vector[YZ] * vector[XZ]) +
           vector[XZ] * (vector[XY] * vector[YZ] - vector[YY] * vector[XZ]);
 

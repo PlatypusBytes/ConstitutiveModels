@@ -4,6 +4,8 @@
 #include "stress_utils.h"
 #include "utils.h"
 
+
+
 void calculate_stress_invariants_3d(const double stress[VOIGTSIZE_3D], double* p, double* J,
                                     double* theta, double* j2, double* j3,
                                     double s_dev[VOIGTSIZE_3D])
@@ -140,11 +142,16 @@ void calculate_principle_stresses_3d(const double stress[VOIGTSIZE_3D], double p
     double j3;
     double deviatoric_stress[VOIGTSIZE_3D];
 
-    calculate_stress_invariants_3d(stress, mean_stress,J, theta, j2,j3, deviatoric_stress)
+    calculate_stress_invariants_3d(stress, &mean_stress,&J, &theta, &j2,&j3, deviatoric_stress);
 
-    principle_stresses[0] = mean_stress + sqrt(4 * j2 / 3) * cos(theta)
-    principle_stresses[1] = mean_stress + sqrt(4 * j2 / 3) * cos(theta - 2 * PI / 3)
-    principle_stresses[2] = mean_stress + sqrt(4 * j2 / 3) * cos(theta + 2 * PI / 3);
+    // theta is the sine-based Lode angle in [-pi/6, pi/6] (theta = pi/6 in triaxial compression),
+    // the cosine roots below require the cosine-based angle in [0, pi/3]
+    const double alpha = PI / 6.0 - theta;
+    const double radius = 2.0 * J / sqrt(3.0);
+
+    principle_stresses[0] = mean_stress + radius * cos(alpha);
+    principle_stresses[1] = mean_stress + radius * cos(alpha - 2.0 * PI / 3.0);
+    principle_stresses[2] = mean_stress + radius * cos(alpha + 2.0 * PI / 3.0);
 
 }
 
@@ -157,4 +164,269 @@ void calculate_dq_dsigma_triaxial_state_3d(double dqdsigma[VOIGTSIZE_3D])
 
     dqdsigma[0] = 1;
     dqdsigma[2] = -1;
+}
+
+
+
+
+/* ------------------------------------------------------------
+   Dot product
+   ------------------------------------------------------------ */
+static double dot3(const double a[3], const double b[3])
+{
+    return a[0]*b[0] +
+           a[1]*b[1] +
+           a[2]*b[2];
+}
+
+
+/* ------------------------------------------------------------
+   Norm
+   ------------------------------------------------------------ */
+static double norm3(const double a[3])
+{
+    return sqrt(dot3(a, a));
+}
+
+
+/* ------------------------------------------------------------
+   Normalize
+   ------------------------------------------------------------ */
+static void normalize3(double a[3])
+{
+    double n = norm3(a);
+
+    if (n > 1.0e-15) {
+        a[0] /= n;
+        a[1] /= n;
+        a[2] /= n;
+    }
+}
+
+
+/* ------------------------------------------------------------
+   Cross product
+   ------------------------------------------------------------ */
+static void cross3(
+    const double a[3],
+    const double b[3],
+    double c[3])
+{
+    c[0] = a[1]*b[2] - a[2]*b[1];
+    c[1] = a[2]*b[0] - a[0]*b[2];
+    c[2] = a[0]*b[1] - a[1]*b[0];
+}
+
+
+/* ------------------------------------------------------------
+   Swap eigenvectors/eigenvalues
+   ------------------------------------------------------------ */
+static void swap_eigenpairs(
+    double eig[3],
+    double Q[3][3],
+    int a,
+    int b)
+{
+    double tmp;
+
+    tmp = eig[a];
+    eig[a] = eig[b];
+    eig[b] = tmp;
+
+    for (int i = 0; i < 3; i++) {
+        tmp = Q[i][a];
+        Q[i][a] = Q[i][b];
+        Q[i][b] = tmp;
+    }
+}
+
+
+/* ------------------------------------------------------------
+   Jacobi eigensolver for symmetric 3x3 matrix.
+
+   Input:
+       A = symmetric matrix
+
+   Output:
+       eig = eigenvalues
+       Q   = eigenvectors stored as columns
+
+   eig[0] corresponds to Q[:,0], etc.
+   ------------------------------------------------------------ */
+static void jacobi_eigen_3x3(
+    double A[3][3],
+    double eig[3],
+    double Q[3][3])
+{
+    /* Initialize Q = identity */
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            Q[i][j] = (i == j) ? 1.0 : 0.0;
+        }
+    }
+
+    for (int iter = 0; iter < JACOBI_MAX_ITER; iter++) {
+
+        /*
+         * Find largest off-diagonal element.
+         */
+        int p = 0;
+        int q = 1;
+
+        double max_off = fabs(A[0][1]);
+
+        if (fabs(A[0][2]) > max_off) {
+            max_off = fabs(A[0][2]);
+            p = 0;
+            q = 2;
+        }
+
+        if (fabs(A[1][2]) > max_off) {
+            max_off = fabs(A[1][2]);
+            p = 1;
+            q = 2;
+        }
+
+        if (max_off < EIG_TOL)
+            break;
+
+
+        /*
+         * Jacobi rotation.
+         */
+        double app = A[p][p];
+        double aqq = A[q][q];
+        double apq = A[p][q];
+
+        double phi = 0.5 * atan2(
+            2.0 * apq,
+            aqq - app
+        );
+
+        double c = cos(phi);
+        double s = sin(phi);
+
+
+        /*
+         * Rotate matrix.
+         */
+        A[p][p] =
+            c*c*app
+            - 2.0*c*s*apq
+            + s*s*aqq;
+
+        A[q][q] =
+            s*s*app
+            + 2.0*c*s*apq
+            + c*c*aqq;
+
+        A[p][q] = 0.0;
+        A[q][p] = 0.0;
+
+
+        for (int k = 0; k < 3; k++) {
+
+            if (k == p || k == q)
+                continue;
+
+            double akp = A[k][p];
+            double akq = A[k][q];
+
+            A[k][p] = c*akp - s*akq;
+            A[p][k] = A[k][p];
+
+            A[k][q] = s*akp + c*akq;
+            A[q][k] = A[k][q];
+        }
+
+
+        /*
+         * Update eigenvectors.
+         */
+        for (int k = 0; k < 3; k++) {
+
+            double qkp = Q[k][p];
+            double qkq = Q[k][q];
+
+            Q[k][p] = c*qkp - s*qkq;
+            Q[k][q] = s*qkp + c*qkq;
+        }
+    }
+
+
+    /*
+     * Extract eigenvalues.
+     */
+    eig[0] = A[0][0];
+    eig[1] = A[1][1];
+    eig[2] = A[2][2];
+
+
+    /*
+     * Sort descending:
+     *
+     * sigma1 >= sigma2 >= sigma3
+     */
+    if (eig[0] < eig[1])
+        swap_eigenpairs(eig, Q, 0, 1);
+
+    if (eig[1] < eig[2])
+        swap_eigenpairs(eig, Q, 1, 2);
+
+    if (eig[0] < eig[1])
+        swap_eigenpairs(eig, Q, 0, 1);
+}
+
+
+static void stress_voigt_matrix(
+    const double stress[6],
+    double A[3][3])
+{
+    A[0][0] = stress[0];  // sxx
+    A[1][1] = stress[1];  // syy
+    A[2][2] = stress[2];  // szz
+
+    A[0][1] = stress[3];  // txy
+    A[1][0] = stress[3];
+
+    A[1][2] = stress[4];  // tyz
+    A[2][1] = stress[4];
+
+    A[0][2] = stress[5];  // txz
+    A[2][0] = stress[5];
+}
+
+void calculate_principal_system(
+    const double stress[6],
+    double principal_stress[3],
+    double Q[3][3])
+{
+    double A[3][3];
+
+    stress_voigt_matrix(stress, A);
+
+    jacobi_eigen_3x3(
+        A,
+        principal_stress,
+        Q
+    );
+}
+
+void calculate_stress_from_principal_system(
+    const double principal_stress[3],
+    double Q[3][3],
+    double stress[VOIGTSIZE_3D])
+{
+    for (int i = 0; i < VOIGTSIZE_3D; i++)
+        stress[i] = 0.0;
+
+    // stress_ij = sum_k principal_stress_k * Q_ik * Q_jk
+    for (int k = 0; k < 3; k++) {
+        stress[XX] += principal_stress[k] * Q[0][k] * Q[0][k];
+        stress[YY] += principal_stress[k] * Q[1][k] * Q[1][k];
+        stress[ZZ] += principal_stress[k] * Q[2][k] * Q[2][k];
+        stress[XY] += principal_stress[k] * Q[0][k] * Q[1][k];
+        stress[YZ] += principal_stress[k] * Q[1][k] * Q[2][k];
+        stress[XZ] += principal_stress[k] * Q[0][k] * Q[2][k];
+    }
 }

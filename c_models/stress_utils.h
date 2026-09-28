@@ -2,6 +2,10 @@
 
 #include "globals.h"
 
+
+#define EIG_TOL 1.0e-10
+#define JACOBI_MAX_ITER 50
+
 /**
  * @brief calculates stress invariants for 3D stress tensor
  * @param[in]  stress 3D stress tensor (6 components in Voigt notation)
@@ -30,7 +34,29 @@ void calculate_stress_invariants_derivatives_3d(const double J, const double s_d
                                                 double dp_dsig[VOIGTSIZE_3D], double dJ_dsig[VOIGTSIZE_3D],
                                                 double dtheta_dsig[VOIGTSIZE_3D]);
 
-void calculate_principle_stresses_3d(const double stress[VOIGTSIZE_3D], double principle_stresses[3])
+/**
+ * @brief calculates the principal stresses from the stress invariants (Lode angle solution)
+ * @param[in]  stress 3D stress tensor (6 components in Voigt notation)
+ * @param[out] principle_stresses principal stresses, sorted descending (s1 >= s2 >= s3)
+ */
+void calculate_principle_stresses_3d(const double stress[VOIGTSIZE_3D], double principle_stresses[3]);
+
+/**
+ * @brief calculates the principal stresses and principal directions (Jacobi eigensolver)
+ * @param[in]  stress 3D stress tensor (6 components in Voigt notation)
+ * @param[out] principal_stress principal stresses, sorted descending (s1 >= s2 >= s3)
+ * @param[out] Q principal directions stored as columns, Q[:][i] belongs to principal_stress[i]
+ */
+void calculate_principal_system(const double stress[VOIGTSIZE_3D], double principal_stress[3], double Q[3][3]);
+
+/**
+ * @brief rotates principal stresses back to the global frame: stress = Q * diag(principal_stress) * Q^T
+ * @param[in]  principal_stress principal stresses
+ * @param[in]  Q principal directions stored as columns (as returned by calculate_principal_system)
+ * @param[out] stress 3D stress tensor (6 components in Voigt notation)
+ */
+void calculate_stress_from_principal_system(const double principal_stress[3], double Q[3][3],
+                                            double stress[VOIGTSIZE_3D]);
 
 
 
