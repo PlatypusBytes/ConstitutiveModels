@@ -344,3 +344,34 @@ void calculate_stress_from_principal_system(
         stress[XZ] += principal_stress[k] * Q[0][k] * Q[2][k];
     }
 }
+double calculate_mean_stress(const double stress[VOIGTSIZE_3D])
+{
+    return (stress[XX] + stress[YY] + stress[ZZ]) / 3.0;
+}
+
+void calculate_deviatoric_stress(const double stress[VOIGTSIZE_3D], double p, double s_dev[VOIGTSIZE_3D])
+{
+    s_dev[XX] = stress[XX] - p;
+    s_dev[YY] = stress[YY] - p;
+    s_dev[ZZ] = stress[ZZ] - p;
+    s_dev[XY] = stress[XY];
+    s_dev[YZ] = stress[YZ];
+    s_dev[XZ] = stress[XZ];
+}
+
+double calculate_von_mises_stress(const double stress[VOIGTSIZE_3D])
+{
+    double s_dev[VOIGTSIZE_3D];
+    calculate_deviatoric_stress(stress, calculate_mean_stress(stress), s_dev);
+    double j2 = 0.5 * (s_dev[XX] * s_dev[XX] + s_dev[YY] * s_dev[YY] + s_dev[ZZ] * s_dev[ZZ]) +
+                (s_dev[XY] * s_dev[XY] + s_dev[YZ] * s_dev[YZ] + s_dev[XZ] * s_dev[XZ]);
+    return sqrt(3.0 * j2);
+}
+
+double calculate_min_principal_stress(const double stress[VOIGTSIZE_3D])
+{
+    double principal_stress[3];
+    double Q[3][3];
+    calculate_principal_system(stress, principal_stress, Q);
+    return principal_stress[2];
+}

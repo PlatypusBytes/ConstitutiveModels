@@ -54,7 +54,7 @@ def dll():
     if os.path.exists(path):
         return path
 
-    # Build with gcc (self-contained: only needs globals, utils, stress_utils, hookes_law).
+    # Build with gcc from the model and the shared modules it uses.
     if shutil.which("gcc") is None:
         pytest.skip("hardening_soil shared library not built and gcc not available")
 
@@ -65,7 +65,15 @@ def dll():
         os.path.join(root, "c_models", "globals.c"),
         os.path.join(root, "c_models", "utils.c"),
         os.path.join(root, "c_models", "stress_utils.c"),
+        os.path.join(root, "c_models", "strain_utils.c"),
         os.path.join(root, "c_models", "elastic_laws", "hookes_law.c"),
+        os.path.join(root, "c_models", "elastic_laws", "power_law_stiffness.c"),
+        os.path.join(root, "c_models", "yield_surfaces", "mohr_coulomb_surface.c"),
+        os.path.join(root, "c_models", "yield_surfaces", "hyperbolic_shear_surface.c"),
+        os.path.join(root, "c_models", "yield_surfaces", "elliptic_cap_surface.c"),
+        os.path.join(root, "c_models", "hardening_rules", "hyperbolic_shear_hardening.c"),
+        os.path.join(root, "c_models", "hardening_rules", "cap_hardening.c"),
+        os.path.join(root, "c_models", "flow_rules", "rowe_dilatancy.c"),
     ]
     cmd = ["gcc", "-O2", "-shared", "-o", path, *sources, "-lm"]
     subprocess.run(cmd, check=True)

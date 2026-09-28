@@ -53,3 +53,42 @@ void calculate_stress_from_principal_system(const double principal_stress[3], do
 
 
 
+/**
+ * @brief Triaxial corners of isotropic yield surfaces in principal stress space, for principal
+ * stresses ordered s1 >= s2 >= s3.
+ */
+typedef enum
+{
+    PRINCIPAL_CORNER_NONE,
+    PRINCIPAL_CORNER_S2_EQ_S3, ///< s2 = s3 (triaxial compression when compression is positive)
+    PRINCIPAL_CORNER_S1_EQ_S2  ///< s1 = s2 (triaxial extension when compression is positive)
+} PrincipalCorner;
+
+/**
+ * @brief calculates the mean stress p = trace(stress) / 3
+ * @param[in]  stress 3D stress tensor (6 components in Voigt notation)
+ * @return mean stress
+ */
+double calculate_mean_stress(const double stress[VOIGTSIZE_3D]);
+
+/**
+ * @brief calculates the deviatoric stress s = stress - p I
+ * @param[in]  stress 3D stress tensor (6 components in Voigt notation)
+ * @param[in]  p mean stress of the stress tensor
+ * @param[out] s_dev deviatoric stress tensor (6 components in Voigt notation)
+ */
+void calculate_deviatoric_stress(const double stress[VOIGTSIZE_3D], double p, double s_dev[VOIGTSIZE_3D]);
+
+/**
+ * @brief calculates the von Mises equivalent stress q = sqrt(3 J2), including the shear components
+ * @param[in]  stress 3D stress tensor (6 components in Voigt notation)
+ * @return von Mises equivalent stress
+ */
+double calculate_von_mises_stress(const double stress[VOIGTSIZE_3D]);
+
+/**
+ * @brief calculates the algebraically smallest principal stress
+ * @param[in]  stress 3D stress tensor (6 components in Voigt notation)
+ * @return smallest principal stress (the minor principal stress when compression is positive)
+ */
+double calculate_min_principal_stress(const double stress[VOIGTSIZE_3D]);
