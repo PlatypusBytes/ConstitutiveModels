@@ -130,7 +130,6 @@
 /* At most the shear surface, the cap and the corner equality are active at the same time. */
 #define HS_MAX_ACTIVE 3
 
-#define HS_DEBUG
 
 /* Material parameters gathered in a struct for convenience. */
 typedef struct
@@ -1352,12 +1351,12 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
 
     if (!converged)
     {
-//        fprintf(stderr, "UMAT Warning: Hardening Soil return mapping did not converge; "
-//                        "requesting a smaller time increment.\n");
-//#ifdef HS_DEBUG
-//        fprintf(stderr, "[hs] stress = [%g %g %g %g %g %g], gamma_p = %g, p_c = %g\n", STRESS[XX],
-//                STRESS[YY], STRESS[ZZ], STRESS[XY], STRESS[YZ], STRESS[XZ], STATEV[0], STATEV[1]);
-//#endif
+        //        fprintf(stderr, "UMAT Warning: Hardening Soil return mapping did not converge; "
+        //                        "requesting a smaller time increment.\n");
+        //#ifdef HS_DEBUG
+        //        fprintf(stderr, "[hs] stress = [%g %g %g %g %g %g], gamma_p = %g, p_c = %g\n", STRESS[XX],
+        //                STRESS[YY], STRESS[ZZ], STRESS[XY], STRESS[YZ], STRESS[XZ], STATEV[0], STATEV[1]);
+        //#endif
         /* keep the stress and state at the start of the increment, with the elastic tangent */
         double factor = hs_stiffness_factor(&prm, hs_minor_principal_stress(stress));
         calculate_elastic_stiffness_matrix_3d(prm.Eur_ref * factor, prm.nu, DDSDDE);

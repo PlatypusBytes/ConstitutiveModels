@@ -35,13 +35,6 @@ void calculate_stress_invariants_derivatives_3d(const double J, const double s_d
                                                 double dtheta_dsig[VOIGTSIZE_3D]);
 
 /**
- * @brief calculates the principal stresses from the stress invariants (Lode angle solution)
- * @param[in]  stress 3D stress tensor (6 components in Voigt notation)
- * @param[out] principle_stresses principal stresses, sorted descending (s1 >= s2 >= s3)
- */
-void calculate_principle_stresses_3d(const double stress[VOIGTSIZE_3D], double principle_stresses[3]);
-
-/**
  * @brief calculates the principal stresses and principal directions (Jacobi eigensolver)
  * @param[in]  stress 3D stress tensor (6 components in Voigt notation)
  * @param[out] principal_stress principal stresses, sorted descending (s1 >= s2 >= s3)
