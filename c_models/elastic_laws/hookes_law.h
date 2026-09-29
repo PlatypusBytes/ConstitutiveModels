@@ -37,3 +37,22 @@ void calculate_elastic_stiffness_matrix_2d_interface(double E, double nu,
  */
 void calculate_elastic_stiffness_matrix_3d_interface(double E, double nu,
                                            double elastic_matrix[VOIGTSIZE_3D_INTERFACE * VOIGTSIZE_3D_INTERFACE]);
+/**
+ * @brief Function to calculate the isotropic elastic stiffness matrix acting on the principal
+ * stresses and strains, d sigma_i = D_ij d eps_j.
+ *
+ * @param[in]  E Young's modulus of the material.
+ * @param[in]  nu Poisson's ratio of the material.
+ * @param[out] elastic_matrix Pointer to the output stiffness matrix (3x3) in row-major order.
+ */
+void calculate_elastic_stiffness_matrix_principal(double E, double nu, double elastic_matrix[9]);
+
+/**
+ * @brief Shear modulus G = E / (2 (1 + nu)).
+ */
+double calculate_shear_modulus(double E, double nu);
+
+/**
+ * @brief Bulk modulus K = E / (3 (1 - 2 nu)).
+ */
+double calculate_bulk_modulus(double E, double nu);

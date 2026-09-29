@@ -4,6 +4,8 @@
 #include "stress_utils.h"
 #include "utils.h"
 
+
+
 void calculate_stress_invariants_3d(const double stress[VOIGTSIZE_3D], double* p, double* J,
                                     double* theta, double* j2, double* j3,
                                     double s_dev[VOIGTSIZE_3D])
@@ -127,4 +129,249 @@ void calculate_stress_invariants_derivatives_3d(const double J, const double s_d
     {
         dtheta_dsig[i] = dtheta_dJ2 * dJ2_dsig[i] + dtheta_dJ3 * dJ3_dsig[i];
     }
+}
+
+
+/* ------------------------------------------------------------
+   Swap eigenvectors/eigenvalues
+   ------------------------------------------------------------ */
+static void swap_eigenpairs(
+    double eig[3],
+    double Q[3][3],
+    int a,
+    int b)
+{
+    double tmp;
+
+    tmp = eig[a];
+    eig[a] = eig[b];
+    eig[b] = tmp;
+
+    for (int i = 0; i < 3; i++) {
+        tmp = Q[i][a];
+        Q[i][a] = Q[i][b];
+        Q[i][b] = tmp;
+    }
+}
+
+
+/* ------------------------------------------------------------
+   Jacobi eigensolver for symmetric 3x3 matrix.
+
+   Input:
+       A = symmetric matrix
+
+   Output:
+       eig = eigenvalues
+       Q   = eigenvectors stored as columns
+
+   eig[0] corresponds to Q[:,0], etc.
+   ------------------------------------------------------------ */
+static void jacobi_eigen_3x3(
+    double A[3][3],
+    double eig[3],
+    double Q[3][3])
+{
+    /* Initialize Q = identity */
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            Q[i][j] = (i == j) ? 1.0 : 0.0;
+        }
+    }
+
+    for (int iter = 0; iter < JACOBI_MAX_ITER; iter++) {
+
+        /*
+         * Find largest off-diagonal element.
+         */
+        int p = 0;
+        int q = 1;
+
+        double max_off = fabs(A[0][1]);
+
+        if (fabs(A[0][2]) > max_off) {
+            max_off = fabs(A[0][2]);
+            p = 0;
+            q = 2;
+        }
+
+        if (fabs(A[1][2]) > max_off) {
+            max_off = fabs(A[1][2]);
+            p = 1;
+            q = 2;
+        }
+
+        if (max_off < EIG_TOL)
+            break;
+
+
+        /*
+         * Jacobi rotation.
+         */
+        double app = A[p][p];
+        double aqq = A[q][q];
+        double apq = A[p][q];
+
+        double phi = 0.5 * atan2(
+            2.0 * apq,
+            aqq - app
+        );
+
+        double c = cos(phi);
+        double s = sin(phi);
+
+
+        /*
+         * Rotate matrix.
+         */
+        A[p][p] =
+            c*c*app
+            - 2.0*c*s*apq
+            + s*s*aqq;
+
+        A[q][q] =
+            s*s*app
+            + 2.0*c*s*apq
+            + c*c*aqq;
+
+        A[p][q] = 0.0;
+        A[q][p] = 0.0;
+
+
+        for (int k = 0; k < 3; k++) {
+
+            if (k == p || k == q)
+                continue;
+
+            double akp = A[k][p];
+            double akq = A[k][q];
+
+            A[k][p] = c*akp - s*akq;
+            A[p][k] = A[k][p];
+
+            A[k][q] = s*akp + c*akq;
+            A[q][k] = A[k][q];
+        }
+
+
+        /*
+         * Update eigenvectors.
+         */
+        for (int k = 0; k < 3; k++) {
+
+            double qkp = Q[k][p];
+            double qkq = Q[k][q];
+
+            Q[k][p] = c*qkp - s*qkq;
+            Q[k][q] = s*qkp + c*qkq;
+        }
+    }
+
+
+    /*
+     * Extract eigenvalues.
+     */
+    eig[0] = A[0][0];
+    eig[1] = A[1][1];
+    eig[2] = A[2][2];
+
+
+    /*
+     * Sort descending:
+     *
+     * sigma1 >= sigma2 >= sigma3
+     */
+    if (eig[0] < eig[1])
+        swap_eigenpairs(eig, Q, 0, 1);
+
+    if (eig[1] < eig[2])
+        swap_eigenpairs(eig, Q, 1, 2);
+
+    if (eig[0] < eig[1])
+        swap_eigenpairs(eig, Q, 0, 1);
+}
+
+
+static void stress_voigt_matrix(
+    const double stress[6],
+    double A[3][3])
+{
+    A[0][0] = stress[0];  // sxx
+    A[1][1] = stress[1];  // syy
+    A[2][2] = stress[2];  // szz
+
+    A[0][1] = stress[3];  // txy
+    A[1][0] = stress[3];
+
+    A[1][2] = stress[4];  // tyz
+    A[2][1] = stress[4];
+
+    A[0][2] = stress[5];  // txz
+    A[2][0] = stress[5];
+}
+
+void calculate_principal_system(
+    const double stress[6],
+    double principal_stress[3],
+    double Q[3][3])
+{
+    double A[3][3];
+
+    stress_voigt_matrix(stress, A);
+
+    jacobi_eigen_3x3(
+        A,
+        principal_stress,
+        Q
+    );
+}
+
+void calculate_stress_from_principal_system(
+    const double principal_stress[3],
+    double Q[3][3],
+    double stress[VOIGTSIZE_3D])
+{
+    for (int i = 0; i < VOIGTSIZE_3D; i++)
+        stress[i] = 0.0;
+
+    // stress_ij = sum_k principal_stress_k * Q_ik * Q_jk
+    for (int k = 0; k < 3; k++) {
+        stress[XX] += principal_stress[k] * Q[0][k] * Q[0][k];
+        stress[YY] += principal_stress[k] * Q[1][k] * Q[1][k];
+        stress[ZZ] += principal_stress[k] * Q[2][k] * Q[2][k];
+        stress[XY] += principal_stress[k] * Q[0][k] * Q[1][k];
+        stress[YZ] += principal_stress[k] * Q[1][k] * Q[2][k];
+        stress[XZ] += principal_stress[k] * Q[0][k] * Q[2][k];
+    }
+}
+double calculate_mean_stress(const double stress[VOIGTSIZE_3D])
+{
+    return (stress[XX] + stress[YY] + stress[ZZ]) / 3.0;
+}
+
+void calculate_deviatoric_stress(const double stress[VOIGTSIZE_3D], double p, double s_dev[VOIGTSIZE_3D])
+{
+    s_dev[XX] = stress[XX] - p;
+    s_dev[YY] = stress[YY] - p;
+    s_dev[ZZ] = stress[ZZ] - p;
+    s_dev[XY] = stress[XY];
+    s_dev[YZ] = stress[YZ];
+    s_dev[XZ] = stress[XZ];
+}
+
+double calculate_von_mises_stress(const double stress[VOIGTSIZE_3D])
+{
+    double s_dev[VOIGTSIZE_3D];
+    calculate_deviatoric_stress(stress, calculate_mean_stress(stress), s_dev);
+    double j2 = 0.5 * (s_dev[XX] * s_dev[XX] + s_dev[YY] * s_dev[YY] + s_dev[ZZ] * s_dev[ZZ]) +
+                (s_dev[XY] * s_dev[XY] + s_dev[YZ] * s_dev[YZ] + s_dev[XZ] * s_dev[XZ]);
+    return sqrt(3.0 * j2);
+}
+
+double calculate_min_principal_stress(const double stress[VOIGTSIZE_3D])
+{
+    double principal_stress[3];
+    double Q[3][3];
+    calculate_principal_system(stress, principal_stress, Q);
+    return principal_stress[2];
 }

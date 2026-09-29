@@ -74,3 +74,21 @@ void calculate_elastic_stiffness_matrix_3d_interface(double E, double nu,
     elastic_matrix[2 * VOIGTSIZE_3D_INTERFACE + 2] = G;  // (row 2, col 2)
 
 }
+void calculate_elastic_stiffness_matrix_principal(double E, double nu, double elastic_matrix[9])
+{
+    double G = calculate_shear_modulus(E, nu);
+    double lambda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu));  // Lame's first param
+    for (int row = 0; row < 3; ++row)
+        for (int col = 0; col < 3; ++col)
+            elastic_matrix[3 * row + col] = lambda + ((row == col) ? 2.0 * G : 0.0);
+}
+
+double calculate_shear_modulus(double E, double nu)
+{
+    return E / (2.0 * (1.0 + nu));
+}
+
+double calculate_bulk_modulus(double E, double nu)
+{
+    return E / (3.0 * (1.0 - 2.0 * nu));
+}
