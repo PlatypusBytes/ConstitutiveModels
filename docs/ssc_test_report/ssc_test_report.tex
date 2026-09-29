@@ -1,0 +1,124 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{subcaption}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+\title{Soft Soil Creep UMAT --- Test Report}
+\author{ConstitutiveModels}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Scope}
+This report summarises the verification of the Soft Soil Creep (SSC) UMAT
+\path{c_models/soft_soil/soft_soil_creep.c}, following Stolle, Vermeer \& Bonnier (1999),
+\emph{Time integration of a constitutive law for soft clays}. The tests are in
+\path{tests/test_soft_soil_creep.py}; the figures are produced by
+\path{docs/ssc_test_report/make_figures.py}, which drives the UMAT along the same
+constant rate of strain (CRS) paths as the tests.
+Stresses are compression positive; $p' = \tfrac13 \operatorname{tr}\boldsymbol\sigma'$ and
+$q = \sqrt{\tfrac32\,\mathbf s:\mathbf s}$.
+
+\begin{table}[h]
+\centering
+\caption{Material parameters (Table I of the paper).}
+\begin{tabular}{cccccccc}
+\toprule
+$A$ & $B$ & $C$ & $\nu$ & $\tau$ [min] & $M$ & $\varphi$ [$^\circ$] & $M_{mc}$ \\
+\midrule
+0.016 & 0.090 & 0.004 & 0.25 & 0.70 & 1.29 & 30 & 1.20 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Test results}
+All 13 unit tests pass (pytest, \today).
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{llc}
+\toprule
+Test & Checks & Result \\
+\midrule
+\path{initial_preconsolidation_pressure} & $p_p = \mathrm{OCR}_0\,p_{eq,0}$ on first call & pass \\
+\path{elastic_isotropic_response} & $p = p_0\exp(\Delta\varepsilon_v/A)$, elastic tangent & pass \\
+\path{zero_time_increment_is_elastic} & no creep for $\Delta t = 0$ & pass \\
+\path{tangent_matches_finite_differences_...} & elastic DDSDDE vs.\ finite differences & pass \\
+\path{isotropic_creep_..._matches_analytic} & $\varepsilon_c = C\ln(1+t/\tau)$ & pass \\
+\path{relaxation_at_constant_strain} & implicit relaxation, decaying rate & pass \\
+\path{tangent_is_eq9} & DDSDDE $= \mathbf D^{ec}$ (Eq.~9) & pass \\
+\path{oedometer_reaches_k0_line} & CRS oedometer, $K_0 \approx 0.62$ & pass \\
+\path{undrained_triaxial_reaches_failure} & CRS undrained, peak $\approx 55$~kPa & pass \\
+\path{large_time_steps_match_small_time_steps} & $\Delta t = 21.6$ vs.\ $2.16$ min & pass \\
+\path{undrained_strength_increases_...} & rate-dependent peak strength & pass \\
+\path{rotation_invariance} & isotropy of the model & pass \\
+\path{mohr_coulomb_is_respected_...} & no MC violation on a 3D path & pass \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{CRS oedometer test}
+Starting from $p_0 = 10$~kPa with $\mathrm{OCR}_0 = 6$, 20\,\% axial strain is applied in
+2160~min (Fig.~2 of the paper). After recompression the path follows the $K_0$ line with
+$K_0 = \sigma'_h/\sigma'_v = 0.617$; the final creep strain is $\varepsilon_c = 0.150$ and the
+OCR stabilises at 1.22 under the constant strain rate. The 100-step and 1000-step solutions
+coincide (Fig.~\ref{fig:oed}).
+
+\begin{figure}[h]
+\centering
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{figures/oedometer_eps_q.pdf}\caption{$\varepsilon_1$--$q$ (log scale)}\end{subfigure}
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{figures/oedometer_p_q.pdf}\caption{$p'$--$q$}\end{subfigure}
+\caption{CRS oedometer test, $p_0 = 10$~kPa, $\mathrm{OCR}_0 = 6$.}
+\label{fig:oed}
+\end{figure}
+
+\section{CRS undrained triaxial test}
+A normally consolidated sample at $p_0 = 100$~kPa is sheared isochorically to 20\,\% axial strain
+in 2160~min (Fig.~3 of the paper). Creep generates excess pore pressure, so $p'$ decreases
+monotonically. $q$ peaks at 55.7~kPa (paper: about 55~kPa), after which the path reaches the
+Mohr--Coulomb envelope $q = M_{mc}\,p'$ and softens along it to $q = 46.7$~kPa
+(Fig.~\ref{fig:und}). Large and small time steps give the same response.
+
+\begin{figure}[h]
+\centering
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{figures/undrained_eps_q.pdf}\caption{$\varepsilon_1$--$q$ (log scale)}\end{subfigure}
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{figures/undrained_p_q.pdf}\caption{$p'$--$q$}\end{subfigure}
+\caption{CRS undrained triaxial test, normally consolidated, $p_0 = 100$~kPa.}
+\label{fig:und}
+\end{figure}
+
+\section{Strain-rate dependence}
+The undrained test is repeated with test durations of 216, 2160 and 21600~min (100 steps each).
+The peak strength increases with strain rate (Table~\ref{tab:rate}, Fig.~\ref{fig:rate}),
+by roughly 9\,\% per decade of strain rate.
+
+\begin{table}[h]
+\centering
+\caption{Peak and final deviator stress of the undrained CRS tests.}
+\label{tab:rate}
+\begin{tabular}{rcccc}
+\toprule
+$t_{end}$ [min] & $q_{peak}$ [kPa] & $p'$ at peak [kPa] & $q_{end}$ [kPa] & $p'_{end}$ [kPa] \\
+\midrule
+21600 & 51.06 & 45.45 & 42.82 & 35.68 \\
+2160  & 55.70 & 49.49 & 46.71 & 38.92 \\
+216   & 60.76 & 53.86 & 50.94 & 42.45 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{figures/rate_eps_q.pdf}\caption{$\varepsilon_1$--$q$ (log scale)}\end{subfigure}
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{figures/rate_p_q.pdf}\caption{$p'$--$q$}\end{subfigure}
+\caption{Undrained CRS tests at three strain rates.}
+\label{fig:rate}
+\end{figure}
+
+\end{document}

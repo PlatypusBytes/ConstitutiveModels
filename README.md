@@ -14,6 +14,7 @@ With C ordering (Row major):
 - Matsuoka-Nakai 
 - Viscoelastic Kelvin Voigt
 - Hardening soil
+- Soft soil creep (Stolle, Vermeer & Bonnier, 1999)
 
 
 # How to compile

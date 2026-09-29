@@ -92,3 +92,36 @@ double calculate_bulk_modulus(double E, double nu)
 {
     return E / (3.0 * (1.0 - 2.0 * nu));
 }
+
+double calculate_shear_modulus_from_bulk_modulus(double K, double nu)
+{
+    return 3.0 * K * (1.0 - 2.0 * nu) / (2.0 * (1.0 + nu));
+}
+
+void calculate_elastic_stiffness_matrix_3d_bulk_shear(
+    double K, double G, double elastic_matrix[VOIGTSIZE_3D * VOIGTSIZE_3D])
+{
+    double lambda = K - 2.0 * G / 3.0;  // Lame's first param
+
+    for (int i = 0; i < VOIGTSIZE_3D * VOIGTSIZE_3D; ++i)
+    {
+        elastic_matrix[i] = 0.0;
+    }
+
+    // Normal stresses
+    for (int row = 0; row < 3; ++row)
+        for (int col = 0; col < 3; ++col)
+            elastic_matrix[row * VOIGTSIZE_3D + col] = lambda + ((row == col) ? 2.0 * G : 0.0);
+
+    // Shear stresses (engineering shear strains)
+    for (int i = 3; i < VOIGTSIZE_3D; ++i) elastic_matrix[i * VOIGTSIZE_3D + i] = G;
+}
+
+void calculate_elastic_stiffness_matrix_principal_bulk_shear(double K, double G,
+                                                             double elastic_matrix[9])
+{
+    double lambda = K - 2.0 * G / 3.0;  // Lame's first param
+    for (int row = 0; row < 3; ++row)
+        for (int col = 0; col < 3; ++col)
+            elastic_matrix[3 * row + col] = lambda + ((row == col) ? 2.0 * G : 0.0);
+}

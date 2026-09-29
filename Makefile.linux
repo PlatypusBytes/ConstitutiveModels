@@ -16,9 +16,12 @@ LINEAR_ELASTIC_TENS_3D_INTERFACE_DIR = $(C_MODELS_DIR)/linear_elastic_with_verti
 MATSUOKA_NAKAI_DIR = $(C_MODELS_DIR)/matsuoka_nakai
 VISCOELASTIC_KELVIN_VOIGT_DIR = $(C_MODELS_DIR)/viscoelastic_kelvin_voigt
 HARDENING_SOIL_DIR = $(C_MODELS_DIR)/hardening_soil
+SOFT_SOIL_DIR = $(C_MODELS_DIR)/soft_soil
 YIELD_SURFACES_DIR = $(C_MODELS_DIR)/yield_surfaces
 HARDENING_RULES_DIR = $(C_MODELS_DIR)/hardening_rules
 FLOW_RULES_DIR = $(C_MODELS_DIR)/flow_rules
+CREEP_LAWS_DIR = $(C_MODELS_DIR)/creep_laws
+RETURN_MAPPINGS_DIR = $(C_MODELS_DIR)/return_mappings
 
 # Include directories
 INCLUDES = -I$(C_MODELS_DIR) -I$(ELASTIC_LAWS_DIR) -I$(YIELD_SURFACES_DIR)
@@ -41,6 +44,16 @@ HARDENING_SOIL_OBJS = \
 	$(BUILD_DIR)/cap_hardening.o \
 	$(BUILD_DIR)/rowe_dilatancy.o
 
+# Building blocks of the Soft Soil Creep model
+SOFT_SOIL_CREEP_OBJS = \
+	$(BUILD_DIR)/logarithmic_elasticity.o \
+	$(BUILD_DIR)/modified_cam_clay_surface.o \
+	$(BUILD_DIR)/mohr_coulomb_surface.o \
+	$(BUILD_DIR)/modified_cam_clay_flow.o \
+	$(BUILD_DIR)/exponential_volumetric_hardening.o \
+	$(BUILD_DIR)/isotache_creep.o \
+	$(BUILD_DIR)/mohr_coulomb_return_mapping.o
+
 # Target shared libraries
 LIBS = \
     $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff.so \
@@ -48,7 +61,8 @@ LIBS = \
     $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff_3d_interface.so \
     $(LIB_DIR)/matsuoka_nakai.so \
     $(LIB_DIR)/viscoelastic_kelvin_voigt.so \
-    $(LIB_DIR)/hardening_soil.so
+    $(LIB_DIR)/hardening_soil.so \
+    $(LIB_DIR)/soft_soil_creep.so
 
 # Default target
 all: directories $(LIBS)
@@ -96,6 +110,25 @@ $(BUILD_DIR)/cap_hardening.o: $(HARDENING_RULES_DIR)/cap_hardening.c $(HARDENING
 $(BUILD_DIR)/rowe_dilatancy.o: $(FLOW_RULES_DIR)/rowe_dilatancy.c $(FLOW_RULES_DIR)/rowe_dilatancy.h
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
+# Soft Soil Creep building blocks: elasticity, surface, flow, hardening, creep and failure
+$(BUILD_DIR)/logarithmic_elasticity.o: $(ELASTIC_LAWS_DIR)/logarithmic_elasticity.c $(ELASTIC_LAWS_DIR)/logarithmic_elasticity.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/modified_cam_clay_surface.o: $(YIELD_SURFACES_DIR)/modified_cam_clay_surface.c $(YIELD_SURFACES_DIR)/modified_cam_clay_surface.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/modified_cam_clay_flow.o: $(FLOW_RULES_DIR)/modified_cam_clay_flow.c $(FLOW_RULES_DIR)/modified_cam_clay_flow.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/exponential_volumetric_hardening.o: $(HARDENING_RULES_DIR)/exponential_volumetric_hardening.c $(HARDENING_RULES_DIR)/exponential_volumetric_hardening.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/isotache_creep.o: $(CREEP_LAWS_DIR)/isotache_creep.c $(CREEP_LAWS_DIR)/isotache_creep.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/mohr_coulomb_return_mapping.o: $(RETURN_MAPPINGS_DIR)/mohr_coulomb_return_mapping.c $(RETURN_MAPPINGS_DIR)/mohr_coulomb_return_mapping.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
 # Matsuoka-Nakai yield surface
 $(BUILD_DIR)/matsuoka_nakai_surface.o: $(YIELD_SURFACES_DIR)/matsuoka_nakai_surface.c $(YIELD_SURFACES_DIR)/matsuoka_nakai_surface.h
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
@@ -124,6 +157,10 @@ $(BUILD_DIR)/viscoelastic_kelvin_voigt.o: $(VISCOELASTIC_KELVIN_VOIGT_DIR)/visco
 $(BUILD_DIR)/hardening_soil.o: $(HARDENING_SOIL_DIR)/hardening_soil.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
+# Soft Soil Creep model
+$(BUILD_DIR)/soft_soil_creep.o: $(SOFT_SOIL_DIR)/soft_soil_creep.c
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
 # Shared libraries
 $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff.so: $(COMMON_OBJS) $(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff.o
 	$(CC) $(LDFLAGS) -o $@ $^
@@ -141,6 +178,9 @@ $(LIB_DIR)/viscoelastic_kelvin_voigt.so: $(COMMON_OBJS) $(BUILD_DIR)/viscoelasti
 	$(CC) $(LDFLAGS) -o $@ $^
 
 $(LIB_DIR)/hardening_soil.so: $(COMMON_OBJS) $(HARDENING_SOIL_OBJS) $(BUILD_DIR)/hardening_soil.o
+	$(CC) $(LDFLAGS) -o $@ $^ -lm
+
+$(LIB_DIR)/soft_soil_creep.so: $(COMMON_OBJS) $(SOFT_SOIL_CREEP_OBJS) $(BUILD_DIR)/soft_soil_creep.o
 	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
 # Clean target
