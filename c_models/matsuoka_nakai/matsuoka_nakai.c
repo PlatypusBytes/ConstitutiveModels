@@ -205,12 +205,66 @@ UMAT_EXPORT void UMAT_CALLCONV umat(
         double denom = vector_dot_product(grad_f, Ce_grad_g, VOIGTSIZE_3D);
         double delta_gamma = f_trial / denom;
 
-        // --- Update Stress ---
-        // STRESS_{n+1} = stress_trial - delta_gamma * Ce * g_vec
-        for (int i = 0; i < VOIGTSIZE_3D; ++i)
+        int MAX_ITER = 25;  // Maximum number of iterations for return mapping
+        for (int local_iter = 0; local_iter < MAX_ITER; ++local_iter)
         {
-            STRESS[i] = stress_trial[i] - delta_gamma * Ce_grad_g[i];
+                // gradient yield function
+                calculate_stress_invariants_derivatives_3d(J_trial, s_dev, j2_trial, j3_trial, dp_dsig,
+                                                           dJ_dsig, dtheta_dsig);
+
+                calculate_yield_gradient(theta_trial, J_trial, matsuoka_nakai_constants, dp_dsig, dJ_dsig,
+                                         dtheta_dsig, grad_f);
+
+                // gradient potential function, g, it is required to recalculate the constants using psi
+                matsuoka_nakai_constants_psi =
+                    calculate_matsuoka_nakai_constants(psi_rad, c);
+
+                calculate_yield_gradient(theta_trial, J_trial, matsuoka_nakai_constants_psi, dp_dsig,
+                                         dJ_dsig, dtheta_dsig, grad_g);
+
+                // Calculate terms needed for delta_gamma and Jacobian
+                matrix_vector_multiply(Ce_matrix, grad_g, VOIGTSIZE_3D, Ce_grad_g);  // Ce * g
+                matrix_vector_multiply(Ce_matrix, grad_f, VOIGTSIZE_3D, Ce_grad_f);  // Ce * f
+
+
+                // STRESS_{n+1} = stress_trial - delta_gamma * Ce * g_vec
+                for (int i = 0; i < VOIGTSIZE_3D; ++i)
+                {
+                    STRESS[i] = stress_trial[i] - delta_gamma * Ce_grad_g[i];
+                }
+                calculate_stress_invariants_3d(STRESS, &p_trial, &J_trial, &theta_trial, &j2_trial,
+                               &j3_trial, s_dev);  // s_dev also calculated here
+                double f_value = 0;
+                calculate_yield_function(p_trial, theta_trial, J_trial, matsuoka_nakai_constants, &f_value);
+
+                if (fabs(f_value) < ZERO_TOL)
+                {
+                    break;  // Converged to yield surface
+                }
+
+                calculate_yield_gradient(theta_trial, J_trial, matsuoka_nakai_constants, dp_dsig, dJ_dsig,
+                         dtheta_dsig, grad_f);
+
+                // gradient potential function, g, it is required to recalculate the constants using psi
+                matsuoka_nakai_constants_psi =
+                    calculate_matsuoka_nakai_constants(psi_rad, c);
+
+                calculate_yield_gradient(theta_trial, J_trial, matsuoka_nakai_constants_psi, dp_dsig,
+                                         dJ_dsig, dtheta_dsig, grad_g);
+
+                matrix_vector_multiply(Ce_matrix, grad_g, VOIGTSIZE_3D, Ce_grad_g);  // Ce * g
+                //matrix_vector_multiply(Ce_matrix, grad_f, VOIGTSIZE_3D, Ce_grad_f);  // Ce * f
+
+                // Calculate denominator for delta_gamma (and Jacobian)
+                // Assumes perfect plasticity (Hardening modulus H=0)
+                // Denom = A_vec : Ce : g_vec = grad_f . (Ce * grad_g)
+                double denom = vector_dot_product(grad_f, Ce_grad_g, VOIGTSIZE_3D);
+                delta_gamma += f_value / denom;
+
         }
+
+
+
 
         // dEps_p = delta_gamma * g_vec
         vector_scalar_multiply(grad_g, delta_gamma, VOIGTSIZE_3D, dEps_p);
