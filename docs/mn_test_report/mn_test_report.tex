@@ -1,0 +1,468 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage[round]{natbib}
+\usepackage[hidelinks]{hyperref}
+
+\graphicspath{{figures/}}
+\setlength{\emergencystretch}{1.5em}
+
+\usepackage{url}
+\DeclareUrlCommand\file{\urlstyle{tt}}  % file names, breakable at / and _
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+
+\title{Matsuoka--Nakai UMAT --- Test Report}
+\author{ConstitutiveModels}
+\date{October 5, 2026}
+
+\begin{document}
+\maketitle
+
+% ---------------------------------------------------------------------------
+\section{Scope}
+
+This report summarises the review and verification of the Matsuoka--Nakai UMAT
+\file{c_models/matsuoka_nakai/matsuoka_nakai.c} and its yield surface module
+\file{c_models/yield_surfaces/matsuoka_nakai_surface.c}. The unit tests are in
+\file{tests/test_matsuoka_nakai.py}; the figures are produced by
+\file{docs/mn_test_report/make_figures.py}, which drives the UMAT along element test paths and
+controls stresses by Newton iteration on the strain increment where needed. The library under test
+is \file{build_C/lib/matsuoka_nakai.dll}, built from the current sources with
+\file{Makefile.windows}.
+
+The model is linear elastic, perfectly plastic:
+\begin{itemize}
+  \item isotropic linear elasticity with $E$ and $\nu$;
+  \item the yield criterion of \citet{Matsuoka_1974}, $I_1 I_2 / I_3 = 9 + 8\tan^2\varphi$, for the
+        principal stresses shifted by $a = c\cot\varphi$, in the formulation of
+        \citet{Lagioia_2016}:
+        \begin{equation}
+          f = M p - K + J\,\alpha \cos\left(\tfrac{1}{3}\arccos(\beta\sin 3\theta)\right)
+          \label{eq:f}
+        \end{equation}
+        with $p$ the mean stress (tension positive), $J = \sqrt{J_2}$,
+        $\sin 3\theta = \tfrac{3\sqrt{3}}{2} J_3 / J_2^{3/2}$ and, with $s = \sin\varphi$,
+        \begin{equation}
+          M = \frac{2\sqrt{3}\,s}{3 - s},\quad
+          K = \frac{2\sqrt{3}\,c\cos\varphi}{3 - s} = M a,\quad
+          \alpha = \frac{2\sqrt{3 + s^2}}{3 - s},\quad
+          \beta = \frac{s\,(9 - s^2)}{(3 + s^2)^{3/2}};
+          \label{eq:constants}
+        \end{equation}
+  \item non-associated flow, with the plastic potential $g$ of the same form with the dilation
+        angle $\psi$ in place of $\varphi$;
+  \item an implicit (backward Euler) return mapping by Newton iteration on the stress and the
+        plastic multiplier, with the consistent tangent \citep{Simo_1985, deSouzaNeto_2008};
+  \item a return to the apex of the cone ($p = -a$) when that is the solution of the return
+        mapping, and sub-stepping if the Newton iteration fails (Sec.~\ref{sec:apex}).
+\end{itemize}
+The surface passes through all six corners of the Mohr--Coulomb pyramid with the same $c$ and
+$\varphi$; between the corners it lies outside the pyramid.
+
+The UMAT interface is tension positive (Abaqus convention). In this report, as in the unit tests,
+stresses and strains are compression positive, $\sigma_1 \ge \sigma_2 \ge \sigma_3$,
+$p = \frac{1}{3}\operatorname{tr}\boldsymbol{\sigma}$, $q = \sqrt{3 J_2}$,
+$b = (\sigma_2 - \sigma_3)/(\sigma_1 - \sigma_3)$ and the mobilised friction angle is
+$\sin\varphi_m = (\sigma_1 - \sigma_3)/(\sigma_1 + \sigma_3 + 2a)$. All tests use
+$E = 20$~MPa, $\nu = 0.3$, $c = 5$~kPa ($a = 8.66$~kPa), $\varphi = 30^\circ$ and
+$\psi = 10^\circ$, unless stated otherwise.
+
+% ---------------------------------------------------------------------------
+\section{Review of the implementation}
+\label{sec:review}
+
+The review covers the version of commit \texttt{96f5efc} (branch \texttt{update\_matsuoka\_nakai}).
+Table~\ref{tab:findings} lists the problems that were found and how they were corrected.
+Table~\ref{tab:before-after} compares that version with the corrected one; the values are printed
+by \texttt{make\_figures.py -{}-compare <library>}.
+
+\begin{table}[h]
+  \centering
+  \caption{Findings of the review and corrections.}
+  \label{tab:findings}
+  \small
+  \begin{tabularx}{\textwidth}{@{}p{0.5cm}LL@{}}
+    \toprule
+    & Finding & Correction \\
+    \midrule
+    1 & $J_3 = \det\mathbf{s}$ in \file{utils.c} used $s_{xy}^2$ instead of $s_{yz}^2$ in the first
+        cofactor. The Lode angle, and therefore the yield function and its gradient, were wrong
+        for stress states with shear components, so the response depended on the orientation of
+        the axes.
+      & Corrected; the same correction is already on branch \texttt{detached4}. \\
+    2 & The local iteration of the return mapping updated the plastic multiplier with gradients
+        of different iterates (the invariant derivatives of the previous iterate), had no line
+        search and an absolute tolerance of $10^{-12}$ on $f$. It converges for small overshoots,
+        but diverges for large trial stresses, to stresses of the order of $10^5$~kPa.
+      & Newton iteration on $(\boldsymbol{\sigma}, \Delta\gamma)$ with the second derivative of
+        $g$, a line search, a relative tolerance of $10^{-10}$, and sub-stepping as fallback. \\
+    3 & DDSDDE was $\mathbf{D}^e - \mathbf{D}^e\mathbf{n}_g\,(\mathbf{D}^e\mathbf{n}_f)^T / d$ with
+        the denominator $d$ of the trial stress (a second \texttt{denom} declared inside the loop
+        hides the first; compiler warning C4456) and gradients of different iterates. It is not
+        the tangent of the stress update, so a global Newton iteration converges linearly.
+      & Consistent tangent of the implicit return mapping. \\
+    4 & No treatment of the apex: trial stresses in tension beyond the apex gave non-finite or
+        diverging stresses.
+      & Return to the apex $p = -a$ when that solves the return mapping (Sec.~\ref{sec:apex}),
+        with $10^{-2}\,\mathbf{D}^e$ as tangent (as for the Hardening Soil model);
+        \texttt{STATEV(1)} = 2. \\
+    5 & For $\varphi = 0$ the constants of the Tresca criterion were used with $M = K = 0$, so the
+        cohesion dropped out of $f$: zero strength. For $\psi = 0$ the plastic potential was a
+        smoothed Tresca surface ($\beta = 0.9999$), whereas the Matsuoka--Nakai surface tends to
+        the von Mises cylinder for $\psi \to 0$: the flow rule jumped at $\psi = 0$.
+      & Constants in closed form, Eq.~\eqref{eq:constants}, continuous in the angle. For
+        $\varphi = 0$ the surface is the von Mises cylinder through the corners of the Tresca
+        hexagon ($q = 2c$); for $\psi = 0$ the flow is deviatoric and normal to that cylinder. \\
+    6 & For $\psi < 0$ the formula $\alpha = \frac{2}{\sqrt{3}}\sqrt{A_1}\,M$ gave $\alpha < 0$,
+        which reverses the deviatoric plastic strain.
+      & $\alpha > 0$ from Eq.~\eqref{eq:constants}; return mapping for contractant flow
+        (Sec.~\ref{sec:apex}). \\
+    7 & SSE was incremented by $\boldsymbol{\sigma}_{n+1} : \Delta\boldsymbol{\varepsilon}^e$, twice
+        the elastic energy for loading from zero stress.
+      & Change of $\frac{1}{2}\boldsymbol{\sigma} : (\mathbf{D}^e)^{-1}\boldsymbol{\sigma}$ (exact). \\
+    8 & $\varphi = 90^\circ$ and $\psi = \pm 90^\circ$ were accepted, where $\beta = 1$ and the
+        derivatives are singular.
+      & $0 \le \varphi < 90^\circ$, $-90^\circ < \psi < 90^\circ$. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\begin{table}[h]
+  \centering
+  \caption{Original (commit \texttt{96f5efc}) and corrected implementation. Increments from
+           compressive states with $E = 20$~MPa, $c = 5$~kPa, $\varphi = 30^\circ$, $\psi = 10^\circ$.}
+  \label{tab:before-after}
+  \small
+  \begin{tabularx}{\textwidth}{@{}Lcc@{}}
+    \toprule
+    Check & Original & Corrected \\
+    \midrule
+    Deviatoric strain increments of 2\,\% in 49 directions from $p = 100$~kPa:
+      $\max|I_1 I_2/(I_3 k) - 1|$ & $1.0$ & $9\times10^{-11}$ \\
+    \quad directions with $|I_1 I_2/(I_3 k) - 1| > 10^{-6}$ & 43 of 49 & 0 \\
+    General plastic increment: $|I_1 I_2/(I_3 k) - 1|$ & $3.1\times10^{-2}$ & $6\times10^{-12}$ \\
+    \quad DDSDDE against finite differences, relative difference & $0.10$ & $4\times10^{-10}$ \\
+    \quad same increment in a rotated frame, relative difference & $5.2\times10^{-3}$ & $10^{-16}$ \\
+    Isotropic extension from 50~kPa by $\varepsilon_v = -3\,\%$ & $|\sigma| \approx 5\times10^7$~kPa
+      & apex, $\sigma = -8.66$~kPa \\
+    $\varphi = 0$, $c = 20$~kPa: $q$ in triaxial compression ($2c = 40$~kPa) & $0$ & $40.0$~kPa \\
+    Global Newton iterations to $10^{-10}$~kPa (Sec.~\ref{sec:numerics}) & $> 40$ & 6 \\
+    SSE / $\frac{1}{2}\boldsymbol{\sigma}:\boldsymbol{\varepsilon}$, elastic loading from zero & 2.0 & 1.0 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The corrected yield function coincides with the original one for $0 < \varphi < 90^\circ$ (the
+closed forms are algebraically equal to the expressions of \citealp{Lagioia_2016}); it differs only
+for $\varphi = 0$. The return mapping, the tangent, the apex return and the plastic potential for
+$\psi \le 0$ are new. In triaxial compression and extension the original implementation gives the
+correct strength and flow, because the stress stays on a meridian, where its iteration converges
+and $J_3$ is not affected by finding~1; this is what the two original unit tests check.
+
+% ---------------------------------------------------------------------------
+\section{Test results}
+
+All 37 unit tests pass (pytest, October 5, 2026). Of the 35 new tests, 21 fail with the original
+implementation (marked $\times$); the two original tests pass with both.
+
+\begin{table}[h]
+  \centering
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.46\textwidth}Lcc@{}}
+    \toprule
+    Test & Checks & Result & Original \\
+    \midrule
+    \file{strain_controlled_compression_triaxial, ..._tension_triaxial} & original tests, strength at the meridians & pass & pass \\
+    \file{returned_stress_satisfies_matsuoka_nakai_criterion_at_all_lode_angles} & $I_1 I_2/I_3 = 9 + 8\tan^2\varphi$ at all Lode angles & pass & $\times$ \\
+    \file{triaxial_strength_equals_mohr_coulomb} ($\times 4$) & compression, extension; $c = 0$, 10~kPa & pass & pass \\
+    \file{dilatancy_at_triaxial_failure} ($\times 6$) & $4\sin\psi/(3 \mp \sin\psi)$, $\psi = 0$, 10, $25^\circ$ & pass & pass \\
+    \file{dilatancy_at_triaxial_failure} ($\times 2$) & idem, $\psi = -10^\circ$ (contractant) & pass & $\times$ \\
+    \file{plane_strain_intermediate_stress_at_failure} ($\times 2$) & $\sigma_2$ at failure, $\psi = \varphi$ and $\psi = 0$ & pass & $\times$ \\
+    \file{undrained_triaxial_compression} ($\times 2$) & $p'$ constant for $\psi = 0$; failure line & pass & pass \\
+    \file{undrained_contractant_flow_reaches_the_apex} ($\times 2$) & $\psi < 0$: down the failure line to the apex & pass & $\times$ \\
+    \file{zero_friction_angle_gives_von_mises} & $q = 2c$ for $\varphi = 0$ & pass & $\times$ \\
+    \file{tangent_matches_numerical_derivative} ($\times 6$) & DDSDDE vs.\ finite differences & pass & $\times$ \\
+    \file{principal_frame_invariance} & rotated loading gives the rotated stress & pass & $\times$ \\
+    \file{tension_beyond_apex_returns_to_apex} ($\times 3$) & apex stress and tangent, elastic reloading & pass & $\times$ \\
+    \file{large_increments_return_to_the_surface} ($\times 2$) & 200 random increments, $\psi = 10^\circ$ and $-10^\circ$ & pass & $\times$ \\
+    \file{energy_terms} & SSE and SPD & pass & $\times$ \\
+    \file{unloading_from_failure_is_elastic} & elastic unloading and tangent & pass & pass \\
+    \file{stress_update_is_continuous_in_strain_increment} & no jumps in the stress update & pass & pass \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The tangent tests compare DDSDDE after one large plastic increment in a general direction (all six
+strain components, $|\Delta\boldsymbol{\varepsilon}| \approx 1.8\,\%$) with central differences of
+the stress update: the relative difference is below $10^{-6}$ (tolerance of the test) for
+$c = 0$ and 5~kPa and $\psi = 0$, 10 and $30^\circ$; it is $4\times10^{-10}$ in
+Table~\ref{tab:before-after}. For $\psi \ne \varphi$ the tangent is not symmetric, for
+$\psi = \varphi$ it is symmetric to $10^{-12}$.
+
+% ---------------------------------------------------------------------------
+\section{Yield surface}
+
+Single deviatoric strain increments of 2\,\% from an isotropic state of 100~kPa, in 49 directions
+of the deviatoric plane, are all plastic and all return onto the Matsuoka--Nakai surface:
+$|I_1 I_2/(I_3 k) - 1| \le 9.2\times10^{-11}$, with $k = 9 + 8\tan^2\varphi$ and the
+shifted stresses (Fig.~\ref{fig:surface}a). Sweeping one sextant for $\varphi = 20$, 30 and
+$40^\circ$, the mobilised friction angle at failure follows the closed-form solution of the
+criterion to $10^{-9}$ degrees (Fig.~\ref{fig:surface}b). It equals $\varphi$ at $b = 0$ and
+$b = 1$ (the Mohr--Coulomb corners) and is largest in between: 22.94, 34.11 and $44.94^\circ$, at
+$b = 0.399$, 0.347 and 0.293.
+
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{deviatoric_section.pdf}
+    \caption{deviatoric plane, shifted stresses normalised by $p + a$, $\varphi = 30^\circ$}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{strength_b.pdf}
+    \caption{mobilised friction angle at failure vs.\ $b$}
+  \end{subfigure}
+  \caption{Stresses returned by the UMAT from single large deviatoric strain increments, against
+           the Matsuoka--Nakai criterion \citep{Matsuoka_1974} and the Mohr--Coulomb criterion.}
+  \label{fig:surface}
+\end{figure}
+
+For $\varphi = 0$ the surface is the von Mises cylinder $q = 2c$: triaxial compression, triaxial
+extension and simple shear all fail at $q = 2c$ to $10^{-10}$, at constant $p$
+(\file{zero_friction_angle_gives_von_mises}).
+
+% ---------------------------------------------------------------------------
+\section{Drained triaxial compression and extension}
+
+Drained triaxial compression and extension start from 100~kPa, with $\sigma_3 = 100$~kPa in
+compression and $\sigma_1 = \sigma_2 = 100$~kPa in extension. At failure,
+$(\sigma_1 + a)/(\sigma_3 + a) = N_\varphi = (1 + \sin\varphi)/(1 - \sin\varphi) = 3$ to
+$10^{-15}$, so $q_f = 217.32$~kPa in compression and 72.44~kPa in extension, as for
+Mohr--Coulomb (Fig.~\ref{fig:triaxial}a). The dilation angle does not affect $q$ in these tests.
+
+At failure the stress is stationary, so the strain increments are plastic. On the compression and
+extension meridians the gradient of the plastic potential has no Lode angle component, and
+\begin{equation}
+  -\frac{\Delta\varepsilon_v}{\Delta(\varepsilon_1 - \varepsilon_3)} =
+  \frac{4\sin\psi}{3 - \sin\psi} \quad\text{(compression)}, \qquad
+  \frac{4\sin\psi}{3 + \sin\psi} \quad\text{(extension)}.
+\end{equation}
+This equals the dilatancy of the Mohr--Coulomb potential at its corners with both adjacent planes
+equally active \citep{Koiter_1960}. The UMAT follows it to $1.4\times10^{-15}$ for
+$\psi = -20$ to $30^\circ$ (Fig.~\ref{fig:triaxial}b--c); for $\psi < 0$ the soil contracts at
+failure.
+
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{triaxial_q.pdf}
+    \caption{deviator stress vs.\ shear strain}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{triaxial_ev.pdf}
+    \caption{volumetric strain, compression}
+  \end{subfigure}
+
+  \vspace{1ex}
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{triaxial_dilatancy.pdf}
+    \caption{dilatancy ratio at failure vs.\ $\psi$}
+  \end{subfigure}
+  \caption{Drained triaxial compression and extension from 100~kPa.}
+  \label{fig:triaxial}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Plane strain}
+
+In plane strain ($\varepsilon_y = 0$, $\sigma_z = 100$~kPa, compression along $x$) the stress
+reaches the surface at $b = \nu = 0.3$ and then moves along it until the plastic strain in the
+plane-strain direction vanishes, $\partial g/\partial\sigma_2 = 0$ (Fig.~\ref{fig:plane-strain}).
+The UMAT reaches the stationary state of this condition to $10^{-12}$:
+\begin{itemize}
+  \item $\psi = \varphi$ (associated): $\sigma_2 + a = \sqrt{(\sigma_1 + a)(\sigma_3 + a)}$, the
+        classical result for the Matsuoka--Nakai criterion. The stress ratio then follows from
+        $t + 1/t = \sqrt{k} - 1$ with $t^2 = (\sigma_1 + a)/(\sigma_3 + a)$, giving
+        $b = 1/(1 + t) = 0.3466$ and $\varphi_m = 34.11^\circ$: the largest strength over $b$
+        (Fig.~\ref{fig:surface}b), because $\partial f/\partial\sigma_2 = 0$ there;
+  \item $\psi = 0$: the potential is the von Mises cylinder, so $\sigma_2 = (\sigma_1 + \sigma_3)/2$,
+        $b = 0.5$ and $\varphi_m = 33.69^\circ$;
+  \item $\psi = 10^\circ$: $b = 0.4495$ and $\varphi_m = 33.91^\circ$, from the condition solved
+        independently of the UMAT.
+\end{itemize}
+The plane strain strength is therefore 3.7 to $4.1^\circ$ higher than the triaxial
+$\varphi = 30^\circ$, and depends on $\psi$.
+
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{plane_strain_b.pdf}
+    \caption{$b$ vs.\ axial strain}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{plane_strain_phi.pdf}
+    \caption{mobilised friction angle vs.\ axial strain}
+  \end{subfigure}
+  \caption{Plane strain compression from 100~kPa (120 steps). Dashed: stationary state at
+           failure from $\partial g / \partial\sigma_2 = 0$.}
+  \label{fig:plane-strain}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Undrained triaxial compression}
+
+Undrained (isochoric) triaxial compression from $p' = 100$~kPa: $\mathrm{d}p' = -K\,\mathrm{d}\varepsilon_v^p$,
+so $p'$ changes only through plastic volume change. With $\psi = 0$, $p'$ stays at 100~kPa (to the
+last digit printed, $10^{-10}$~kPa) and the path ends on the failure line
+$q = \frac{6\sin\varphi}{3 - \sin\varphi}(p' + a) = 1.2\,(p' + a)$ at $q = 130.4$~kPa. With
+$\psi = 10^\circ$ the soil dilates at failure and the path climbs along the failure line, to
+$p' = 306.5$~kPa at $\varepsilon_1 = 5\,\%$ (Fig.~\ref{fig:undrained}); without a dilatancy
+cut-off this continues indefinitely. With $\psi = -5^\circ$ the soil contracts, and the path
+descends along the failure line (static liquefaction) until it reaches the apex,
+$p' = -a = -8.66$~kPa and $q = 0$, at $\varepsilon_1 = 3.85\,\%$, where it stays. On the failure
+line all paths satisfy $q = 1.2\,(p' + a)$ to $2\times10^{-15}$.
+
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{undrained_pq.pdf}
+    \caption{$p'$--$q$}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{undrained_q.pdf}
+    \caption{$\varepsilon_1$--$q$}
+  \end{subfigure}
+  \caption{Undrained triaxial compression from $p' = 100$~kPa with contractant
+           ($\psi = -5^\circ$), non-dilatant and dilatant flow.}
+  \label{fig:undrained}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Apex and contractant flow}
+\label{sec:apex}
+
+The return to the apex $\boldsymbol{\sigma}_A = -a\,\mathbf{I}$ solves the return mapping when its
+plastic strain $(\mathbf{D}^e)^{-1}(\boldsymbol{\sigma}^{tr} - \boldsymbol{\sigma}_A)$ is a flow
+direction of the plastic potential at its apex, $\lambda\,(\frac{1}{3}M_g\mathbf{I} + \mathbf{n})$
+with $\lambda \ge 0$ and $h^*(\mathbf{n}) \le 1$. Here $h^*$ is the support function of the
+deviatoric section of $g$ (the dual norm of its deviatoric term in Eq.~\eqref{eq:f}), which the
+UMAT evaluates by a maximisation over the Lode angle; it agrees with a brute-force maximisation
+over random deviatoric directions to $10^{-13}$. In terms of the trial stress (tension positive):
+\begin{equation}
+  \lambda = \frac{p^{tr} - p_A}{K M_g} \ge 0, \qquad h^*(\mathbf{s}^{tr}) \le 2G\lambda.
+\end{equation}
+\begin{itemize}
+  \item $\psi > 0$: this region lies beyond the apex and is complementary to the trial stresses
+        that return to the cone, so the decision is exact.
+  \item $\psi \le 0$: trial stresses beyond the apex cannot be returned to the cone, because the
+        flow does not reduce $p$. They go to the apex, although the volumetric plastic strain then
+        does not follow the flow rule; this is the usual treatment of the apex.
+  \item $\psi < 0$: the region lies on the compressive side of the apex and overlaps with the
+        trial stresses that return to the cone. The return to the cone is used where it exists,
+        as the solution that is continuous for small increments. For trial stresses far outside
+        the cone in the deviatoric direction neither return exists; for a Drucker--Prager cone
+        both conditions reduce to $J^{tr} \le G\alpha_g(p_A - p^{tr})/(K|M_g|)$. This also holds at
+        the apex itself under continued shearing. The increment is then divided into sub-steps,
+        and in the smallest sub-steps (1/64) such trial stresses are returned to the apex, where
+        contractant flow leads anyway.
+\end{itemize}
+The tension tests and Fig.~\ref{fig:undrained} ($\psi = -5^\circ$) cover these cases.
+
+% ---------------------------------------------------------------------------
+\section{Numerical aspects}
+\label{sec:numerics}
+
+\paragraph{Global convergence.} The test of Fig.~\ref{fig:numerics}a mimics a finite element
+iteration. From a state at failure (eight steps of plane strain loading), $\Delta\varepsilon_x$
+and $\Delta\varepsilon_y$ are prescribed, and $\sigma_z = 100$~kPa, $\sigma_{xy} = 5$~kPa and
+$\sigma_{yz} = \sigma_{xz} = 0$ are the targets; the other strain components are solved for by
+Newton iteration. With DDSDDE the residual falls quadratically,
+$5.4\times10^{-2} \to 1.4\times10^{-5} \to 9\times10^{-13}$~kPa, in six iterations. With the
+elastic stiffness it is still 3.1~kPa after 15 iterations, and with the tangent of the original
+implementation it does not reach $10^{-10}$~kPa within 40 iterations.
+
+\paragraph{Step size.} On the compression and extension meridians the return is radial in the
+deviatoric plane, so the triaxial results above do not depend on the step size. On other paths
+the implicit integration has a first-order error in the step size. For plane strain with
+$\psi = 10^\circ$ up to $\varepsilon_1 = 10\,\%$ (Fig.~\ref{fig:numerics}b), compared with 1000
+steps, the largest difference in $b$ is $1.9\times10^{-2}$, $1.2\times10^{-2}$ and
+$2.9\times10^{-3}$ for 5, 20 and 100 steps, and in $q$ (relative to $q_f$)
+$3.4\times10^{-3}$, $1.8\times10^{-3}$ and $4.3\times10^{-4}$. The stationary state at failure is
+the same for every step size.
+
+\paragraph{Robustness.} The unit tests include 200 random increments with strains of up to the
+order of 10\,\%, for $\psi = 10^\circ$ and $-10^\circ$. The review used 4000 random increments with
+random parameters ($0 \le \varphi < 50^\circ$, $0 \le \psi \le \varphi$, $0 \le c \le 30$~kPa,
+$10^3 \le E \le 10^6$~kPa): every plastic state lies on the surface to $9\times10^{-11}$, and the
+plastic strain increment is parallel to the gradient of $g$ at the returned stress to
+$10^{-10}$. In addition, 40\,000 increments with extreme parameters and strains
+($\varphi$ up to $89^\circ$, $-30^\circ \le \psi \le 89^\circ$, $\nu$ up to 0.49, strain increments
+up to about 300\,\%) were integrated without a failure. Sub-stepping was needed in 1196 of them,
+all but four with $\psi < 0$; in the tests and figures with $\psi \ge 0$ it was never needed. The
+stress update is continuous in the strain increment, also across the elastic--plastic transition
+(\file{stress_update_is_continuous_in_strain_increment}).
+
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{global_newton.pdf}
+    \caption{global Newton iteration of a mixed-control increment}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{step_size.pdf}
+    \caption{plane strain, $\psi = 10^\circ$, with 5, 20 and 100 steps}
+  \end{subfigure}
+  \caption{Convergence with the consistent tangent, and step-size dependence.}
+  \label{fig:numerics}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Open points}
+\label{sec:open}
+
+\begin{enumerate}
+  \item \emph{$\varphi = 0$ and $\psi = 0$.} The surface and the plastic potential now become the
+        von Mises cylinder for a zero angle, the limit of the Matsuoka--Nakai criterion. The
+        original implementation intended a Tresca surface there, as for Mohr--Coulomb. Triaxial
+        results are the same for both, but plane strain with $\psi = 0$ now gives $b = 0.5$ at
+        failure. A Tresca potential for $\psi = 0$ would make the flow rule discontinuous at
+        $\psi = 0$.
+  \item \emph{Negative dilation angle.} The Matsuoka--Nakai criterion is even in the angle, so a
+        contractant potential is not defined by it. The constants of Eq.~\eqref{eq:constants} are
+        continued analytically, which gives $M < 0$ and a deviatoric section mirrored with respect
+        to that of $|\psi|$, as for the Mohr--Coulomb potential with $\psi < 0$; with it the
+        dilatancy at the meridians is that of the Mohr--Coulomb corners (Fig.~\ref{fig:triaxial}c).
+        Contractant perfect plasticity has no solution of the return mapping for some trial
+        stresses (Sec.~\ref{sec:apex}); the apex fallback used there is a pragmatic choice.
+  \item \emph{Apex.} With $\psi \le 0$, trial stresses beyond the apex go to the apex and the
+        plastic strain then has a volumetric part, although $\psi \le 0$. The tangent at the
+        apex is $10^{-2}\,\mathbf{D}^e$, not the exact zero. A convex reformulation that treats
+        this region consistently is given by \citet{Panteghini_2014}.
+  \item \emph{Sub-stepping.} If the Newton iteration fails for a full increment, the increment is
+        divided into $2, 4, \ldots, 64$ sub-steps; DDSDDE is then the tangent of the last
+        sub-step and the stress update is not continuous where the fallback starts. If all levels
+        fail, the stress is not updated and \texttt{PNEWDT} = 0.5 is requested; this did not occur
+        in any of the checks above.
+\end{enumerate}
+
+\bibliographystyle{plainnat}
+\bibliography{../refs}
+
+\end{document}
