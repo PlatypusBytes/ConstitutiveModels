@@ -5,6 +5,7 @@
 \usepackage{booktabs}
 \usepackage{subcaption}
 \usepackage{url}
+\usepackage[round]{natbib}
 \usepackage[hidelinks]{hyperref}
 
 \title{Soft Soil Creep UMAT --- Test Report}
@@ -16,13 +17,31 @@
 
 \section{Scope}
 This report summarises the verification of the Soft Soil Creep (SSC) UMAT
-\path{c_models/soft_soil/soft_soil_creep.c}, following Stolle, Vermeer \& Bonnier (1999),
+\path{c_models/soft_soil/soft_soil_creep.c}, following \citet{Stolle_1999},
 \emph{Time integration of a constitutive law for soft clays}. The tests are in
 \path{tests/test_soft_soil_creep.py}; the figures are produced by
 \path{docs/ssc_test_report/make_figures.py}, which drives the UMAT along the same
 constant rate of strain (CRS) paths as the tests.
 Stresses are compression positive; $p' = \tfrac13 \operatorname{tr}\boldsymbol\sigma'$ and
 $q = \sqrt{\tfrac32\,\mathbf s:\mathbf s}$.
+
+\section{Model}
+The SSC model extends the one-dimensional secondary compression laws of \citet{Buisman_1936},
+\citet{Bjerrum_1967} and \citet{Garlanger_1972} to general stress states
+\citep{Stolle_1997, Vermeer_1998, Vermeer_1999}. The UMAT implements the formulation of
+\citet{Stolle_1999}; equation numbers without further reference refer to that paper.
+\begin{itemize}
+  \item The creep rate is governed by the equivalent pressure $p_{eq} = p' + q^2/(M^2 p')$
+        (Eq.~1), i.e.\ the contours of $p_{eq}$ are the Modified Cam-Clay ellipses of
+        \citet{Roscoe_1968}, and creep flow is normal to them (Eq.~7).
+  \item Volumetric creep follows the isotache law of Eq.~2, with the pre-consolidation pressure
+        $p_p$ growing with the creep strain (Eq.~3).
+  \item Elasticity has a bulk modulus $K = p'/A$ and a constant Poisson's ratio (Eq.~6); failure is
+        bounded by Mohr--Coulomb with zero dilatancy (Eq.~15).
+  \item Stresses are updated implicitly in $p$--$q$ space with a scalar Newton iteration on the creep
+        strain increment (Eqs.~11--13), analogous to the scheme of \citet{Borja_1990} for Cam-clay
+        plasticity; the consistent tangent is Eq.~9.
+\end{itemize}
 
 \begin{table}[h]
 \centering
@@ -120,5 +139,8 @@ $t_{end}$ [min] & $q_{peak}$ [kPa] & $p'$ at peak [kPa] & $q_{end}$ [kPa] & $p'_
 \caption{Undrained CRS tests at three strain rates.}
 \label{fig:rate}
 \end{figure}
+
+\bibliographystyle{plainnat}
+\bibliography{../refs}
 
 \end{document}
