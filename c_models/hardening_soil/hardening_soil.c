@@ -14,8 +14,9 @@
  *    with qa = qf / Rf (Eq. 2) and Ei = 2 E50 / (2 - Rf), so that E50 is the secant stiffness at
  *    q = qf / 2 as defined in Sec. 2.1 (for Rf -> 1 this is the qa/E50 form of Eqs. 7-8).
  *  - Non-associated flow (Eqs. 11-15): g_ij = (sigma_i - sigma_j)/2 - (sigma_i + sigma_j)/2 sin(psi_m)
- *    with the mobilised dilatancy angle psi_m of Rowe's stress-dilatancy theory. The plastic
- *    shear strain is gamma_p = eps1_p - eps2_p - eps3_p (Eq. 9), i.e. d(gamma_p) = dLambda_ij.
+ *    with the mobilised dilatancy angle psi_m of Rowe's stress-dilatancy theory, bounded so that
+ *    the shear surface does not contract (psi_m >= 0 for psi > 0, see hs_sin_psi_mobilised). The plastic shear strain is gamma_p = eps1_p - eps2_p - eps3_p
+ *    (Eq. 9), i.e. d(gamma_p) = dLambda_ij.
  *  - Mohr-Coulomb failure q <= qf (Eq. 2, end of Sec. 3), with the same (mobilised) flow as the
  *    hardening surface, which equals the dilation angle psi at failure (Eq. 13).
  *  - Elliptic cap with associated flow and hardening of the pre-consolidation stress p_c
@@ -224,17 +225,26 @@ typedef struct
 /* Stress-dependent stiffness and dilatancy                            */
 /* ------------------------------------------------------------------ */
 
-/* Mobilised dilatancy angle from Rowe's stress-dilatancy theory (Eqs. 11-12), including the
- * dilatancy cut-off of Eq. 38. Contractant (negative) for phi_m < phi_cv. */
+/*
+ * Mobilised dilatancy angle from Rowe's stress-dilatancy theory (Eqs. 11-12), bounded as:
+ *   sin(phi_m) <  3/4 sin(phi)            : psi_m = 0
+ *   sin(phi_m) >= 3/4 sin(phi), psi >  0  : sin(psi_m) = max(Eq. 11, 0)
+ *   sin(phi_m) >= 3/4 sin(phi), psi <= 0  : psi_m = psi
+ * The shear surface therefore does not contract below phi_cv, where Eq. 11 is negative; plastic
+ * compaction comes from the cap. Without this bound a loose sand (psi = 0, phi_cv = phi) contracts
+ * at every stress ratio below failure, down to psi_m = -phi at phi_m = 0. At failure psi_m = psi
+ * (Eq. 13). Includes the dilatancy cut-off of Eq. 38.
+ */
 static double hs_sin_psi_mobilised(const HSParams* prm, const double s[3], double void_ratio)
 {
     if (prm->use_cutoff && void_ratio >= prm->e_cv) return 0.0;
 
     double sin_phi_m = mohr_coulomb_mobilised_sin_phi(s, prm->a, prm->sin_phi);
-    if (sin_phi_m < 0.0) sin_phi_m = 0.0;
+    if (sin_phi_m < 0.75 * prm->sin_phi) return 0.0;
+    if (prm->sin_psi <= 0.0) return prm->sin_psi;
     if (sin_phi_m > prm->sin_phi) sin_phi_m = prm->sin_phi;
 
-    return rowe_mobilised_sin_psi(sin_phi_m, prm->sin_phi_cv);
+    return fmax(rowe_mobilised_sin_psi(sin_phi_m, prm->sin_phi_cv), 0.0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -877,8 +887,9 @@ static int hs_single_step(double stress[VOIGTSIZE_3D], double* gamma_p, double* 
 
     if (ddsdde)
     {
-        calculate_elastic_stiffness_matrix_3d(st.Eur, prm->nu, ddsdde);
-        //hs_elastoplastic_tangent(&st, active, plastic ? n_active : 0, s, *gamma_p, *p_c, Q, ddsdde);
+        // the elastic stiffness matrix is returned for stability 
+        //calculate_elastic_stiffness_matrix_3d(st.Eur, prm->nu, ddsdde);
+        hs_elastoplastic_tangent(&st, active, plastic ? n_active : 0, s, *gamma_p, *p_c, Q, ddsdde);
         /* at the apex the stress does not change under further loading: keep only a fraction of
          * the elastic stiffness, as for the corner mode, to keep the global matrix regular */
         if (at_apex)

@@ -404,12 +404,27 @@ def test_drained_triaxial_follows_hyperbola(dll):
     assert secant == pytest.approx(E50_REF * factor, rel=2e-3)
 
 
+def sin_psi_mobilised(sin_phi_m, sin_phi, sin_psi):
+    """
+    Mobilised dilatancy of the UMAT: Rowe (Eq. 11) bounded so that the shear surface does
+    not contract below phi_cv.
+    """
+    if sin_phi_m < 0.75 * sin_phi:
+        return 0.0
+    if sin_psi <= 0.0:
+        return sin_psi
+    sin_phi_m = min(sin_phi_m, sin_phi)
+    sin_phi_cv = (sin_phi - sin_psi) / (1.0 - sin_phi * sin_psi)
+    return max((sin_phi_m - sin_phi_cv) / (1.0 - sin_phi_m * sin_phi_cv), 0.0)
+
+
 def test_plastic_strains_follow_rowe_dilatancy(dll):
     """
     Eq. 9: gamma_p = eps1_p - eps2_p - eps3_p. Eqs. 11-15: the plastic volumetric
-    strain follows d eps_v^p = -sin(psi_m) d gamma_p, contractant below phi_cv and
-    equal to -sin(psi) at failure. Cap off and m = 0 (linear elasticity) so that
-    the plastic strains follow from the total strains.
+    strain follows d eps_v^p = -sin(psi_m) d gamma_p, with psi_m from Rowe's relation
+    where it is dilatant and zero below phi_cv, and equal to psi at
+    failure. Cap off and m = 0 (linear elasticity) so that the plastic strains follow
+    from the total strains.
     """
     props = [E50_REF, EUR_REF, 0.0, C, PHI_DEG, PSI_DEG, P_REF, RF, NU, 0.0, K_RATIO]
     history = drained_triaxial(dll, props, 100.0, 0.12, 120)
@@ -426,24 +441,74 @@ def test_plastic_strains_follow_rowe_dilatancy(dll):
         return h[0] - np.linalg.solve(De, h[1] - sigma0)
 
     sin_phi, sin_psi = np.sin(PHI), np.sin(np.radians(PSI_DEG))
-    sin_phi_cv = (sin_phi - sin_psi) / (1.0 - sin_phi * sin_psi)
 
     def minus_sin_psi_m(s):
-        sin_phi_m = min((s[0] - s[2]) / (s[0] + s[2]), sin_phi)
-        return -(sin_phi_m - sin_phi_cv) / (1.0 - sin_phi_m * sin_phi_cv)
+        return -sin_psi_mobilised((s[0] - s[2]) / (s[0] + s[2]), sin_phi, sin_psi)
 
+    n_dilatant = 0
     for previous, current in zip(history[:-1], history[1:]):
         ep, ep_prev = plastic_strain(current), plastic_strain(previous)
         assert current[2][0] == pytest.approx(ep[0] - ep[1] - ep[2], rel=1e-8)
 
         ratio = (ep[:3].sum() - ep_prev[:3].sum()) / (current[2][0] - previous[2][0])
-        expected = 0.5 * (minus_sin_psi_m(previous[1]) + minus_sin_psi_m(current[1]))
-        assert ratio == pytest.approx(expected, abs=1e-2)
+        bounds = sorted([minus_sin_psi_m(previous[1]), minus_sin_psi_m(current[1])])
+        if bounds[0] == 0.0:
+            assert ratio == pytest.approx(0.0, abs=1e-10)  # no contraction below phi_cv
+        else:
+            # psi_m is evaluated at the start of each sub-step, between both ends of the step
+            assert bounds[0] - 1e-6 <= ratio <= bounds[1] + 1e-6
+            n_dilatant += 1
 
-    first_ratio = plastic_strain(history[1])[:3].sum() / history[1][2][0]
-    assert first_ratio > 0.3  # contraction at low stress ratio (~ sin(phi_cv))
+    assert n_dilatant > 10
     assert history[-1][2][2] == 1.0
     assert ratio == pytest.approx(-sin_psi, abs=1e-6)
+
+
+def undrained_triaxial(dll, props, cell, axial_strain, n_steps):
+    """Undrained (isochoric) triaxial compression from an isotropic state (axial = x)."""
+    stress = np.array([cell, cell, cell, 0.0, 0.0, 0.0])
+    statev = np.zeros(3)
+    strain = np.zeros(6)
+    d = axial_strain / n_steps
+    dstrain = np.array([d, -0.5 * d, -0.5 * d, 0.0, 0.0, 0.0])
+    history = [(strain, stress, statev)]
+    for _ in range(n_steps):
+        stress, _, statev = step(dll, stress, statev, strain, dstrain, props)
+        strain = strain + dstrain
+        history.append((strain, stress, statev))
+    return history
+
+
+@pytest.mark.parametrize("psi_deg", [0.0, 4.0])
+def test_undrained_shear_surface_does_not_contract(dll, psi_deg):
+    """
+    Undrained triaxial compression without cap. The shear surface does not contract below
+    phi_cv, so the mean effective stress stays at the cell pressure until phi_m reaches
+    phi_cv (undrained: d p' = -K d eps_v^p). For psi = 0 (phi_cv = phi) it stays there up to
+    and at failure; for psi > 0 the soil dilates beyond phi_cv and p' increases, along a path
+    just below the failure line (the rising sigma_3 keeps the mobilisation below 1).
+    """
+    cell = 300.0
+    props = [E50_REF, EUR_REF, M, C, PHI_DEG, psi_deg, P_REF, RF, NU, 0.0, K_RATIO]
+    history = undrained_triaxial(dll, props, cell, 0.10, 100)
+
+    sin_phi, sin_psi = np.sin(PHI), np.sin(np.radians(psi_deg))
+    sin_phi_cv = (sin_phi - sin_psi) / (1.0 - sin_phi * sin_psi)
+    p = np.array([mean_stress(h[1]) for h in history])
+    sin_phi_m = np.array([(h[1][0] - h[1][2]) / (h[1][0] + h[1][2]) for h in history])
+
+    below_cv = sin_phi_m <= sin_phi_cv * (1.0 - 1e-6)
+    assert np.allclose(p[below_cv], cell, rtol=1e-10)
+    assert np.all(np.diff(p) >= -1e-9 * cell)
+
+    if psi_deg == 0.0:
+        s = history[-1][1]
+        assert history[-1][2][2] == 1.0
+        assert s[0] - s[2] == pytest.approx(qf_of(s[2]), rel=1e-8)
+        assert p[-1] == pytest.approx(cell, rel=1e-10)
+    else:
+        assert sin_phi_m[-1] > sin_phi_cv
+        assert p[-1] > 2.0 * cell
 
 
 def test_cap_isotropic_normal_compression(dll):
@@ -541,7 +606,7 @@ def numerical_tangent(dll, stress, statev, strain, dstrain, props, h=1e-8):
         fd[:, j] = (s1 - s0) / h
     return ddsdde, fd
 
-@pytest.mark.skip(reason="the elastic stiffness matrix is returned rather than the consistent tangent, so this test fails")
+# @pytest.mark.skip(reason="the elastic stiffness matrix is returned rather than the consistent tangent, so this test fails")
 @pytest.mark.parametrize("cap", [0.0, M_CAP])
 def test_tangent_matches_numerical_derivative(dll, cap):
     """
