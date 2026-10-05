@@ -364,11 +364,6 @@ def test_undrained_triaxial_reaches_failure(dll):
     q_values = np.array([p_q(s)[1] for _, s, _ in history])
     strain_values = [t for t, _, _ in history]
 
-    import matplotlib.pyplot as plt
-
-    plt.plot(strain_values,q_values)
-    plt.show()
-
     # never above the failure envelope; the lateral stresses stay equal
     for (_, s, _), p, q in zip(history, p_values, q_values):
         assert q <= M_MC * p * (1.0 + 1e-10)
