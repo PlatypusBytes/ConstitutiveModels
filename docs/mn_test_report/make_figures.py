@@ -13,74 +13,29 @@ quoted in the report, including the verification summary (Table 1), are printed.
 """
 
 import argparse
-import logging
 import os
 import sys
 
-import cffi
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+sys.path.insert(0, os.path.dirname(HERE))  # docs
+import figure_utils as fu  # noqa: E402
+from figure_utils import AXIS, ENVELOPE, INK2, LINESTYLES, REF, SERIES, History, marker, p_q, summary  # noqa: E402
+import matplotlib.pyplot as plt  # noqa: E402
+
 FIG_DIR = os.path.join(HERE, "figures")
-DLL = os.path.join(ROOT, "build_C", "lib", "matsuoka_nakai." + ("dll" if sys.platform == "win32" else "so"))
-
-# --------------------------------------------------------------------------- #
-# UMAT                                                                          #
-# --------------------------------------------------------------------------- #
-_ffi = cffi.FFI()
-_ffi.cdef("""
-void umat(double* STRESS, double* STATEV, double* DDSDDE,
-          double* SSE, double* SPD, double* SCD, double* RPL,
-          double* DDSDDT, double* DRPLDE, double* DRPLDT,
-          double* STRAN, double* DSTRAN, double* TIME, double* DTIME,
-          double* TEMP, double* DTEMP, double* PREDEF, double* DPRED,
-          char* CMNAME, int* NDI, int* NSHR, int* NTENS, int* NSTATV,
-          double* PROPS, int* NPROPS, double* COORDS, double* DROT,
-          double* PNEWDT, double* CELENT, double* DFGRD0, double* DFGRD1,
-          int* NOEL, int* NPT, int* LAYER, int* KSPT, int* KSTEP, int* KINC);
-""")
-
-
-class Umat:
-    """The UMAT of one shared library, loaded once (same arguments as tests/utils.py,
-    Utils.run_c_umat)."""
-
-    def __init__(self, path):
-        if not os.path.exists(path):
-            sys.exit(f"{path} not found: build the C models first (see README.md)")
-        self.path = path
-        self.lib = _ffi.dlopen(path)
-
-    def __call__(self, stress, dstrain, props):
-        """One call in the tension-positive convention of the interface. Returns the stress,
-        DDSDDE, the state variable and the increments of SSE and SPD."""
-        ints = [_ffi.new("int*", v) for v in (3, 3, 6, 1, len(props), 1, 1, 1, 1)]
-        c_stress = _ffi.new("double[]", [float(v) for v in stress])
-        c_statev = _ffi.new("double[]", [0.0])
-        c_ddsdde = _ffi.new("double[]", 36)
-        sse, spd, scd = [_ffi.new("double*", 0.0) for _ in range(3)]
-        self.lib.umat(c_stress, c_statev, c_ddsdde, sse, spd, scd, _ffi.NULL, _ffi.NULL, _ffi.NULL, _ffi.NULL,
-                      _ffi.new("double[]", 6), _ffi.new("double[]", [float(v) for v in dstrain]),
-                      _ffi.new("double[]", [0.0, 0.0]), _ffi.new("double*", 1.0),
-                      _ffi.NULL, _ffi.NULL, _ffi.NULL, _ffi.NULL, _ffi.new("char[]", b"MN".ljust(80)),
-                      ints[0], ints[1], ints[2], ints[3], _ffi.new("double[]", [float(v) for v in props]), ints[4],
-                      _ffi.NULL, _ffi.NULL, _ffi.NULL, _ffi.NULL, _ffi.NULL, _ffi.NULL,
-                      ints[5], ints[6], _ffi.NULL, _ffi.NULL, ints[7], ints[8])
-        return (np.array(list(c_stress)), np.array(list(c_ddsdde)).reshape(6, 6), c_statev[0], sse[0], spd[0])
-
-
-UMAT = None
+DLL = fu.library_path("matsuoka_nakai")
+UMAT = fu.Umat(DLL, "MN")
+save = fu.figure_saver(FIG_DIR)
 
 
 def step(stress, dstrain, props, umat=None):
-    """UMAT call in the compression-positive convention (the tangent is the same in both)."""
-    s, ddsdde, state, _, _ = (umat or UMAT)(-np.asarray(stress, float), -np.asarray(dstrain, float), props)
-    return -s, ddsdde, state
+    """UMAT call in the compression-positive convention (the tangent is the same in both); the
+    single state variable is the return type."""
+    s, statev, ddsdde, _, _ = (umat or UMAT)(-np.asarray(stress, float), [0.0], np.zeros(6),
+                                             -np.asarray(dstrain, float), props)
+    return -s, ddsdde, float(statev[0])
 
 
 # --------------------------------------------------------------------------- #
@@ -96,15 +51,6 @@ def props_of(**overrides):
 
 def attraction(c, phi):
     return c / np.tan(np.radians(phi))
-
-
-def elastic_stiffness(E=BASE["E"], nu=BASE["nu"]):
-    G, lam = E / (2 * (1 + nu)), E * nu / ((1 + nu) * (1 - 2 * nu))
-    D = np.zeros((6, 6))
-    D[:3, :3] = lam
-    D[np.arange(3), np.arange(3)] += 2 * G
-    D[3:, 3:] = G * np.eye(3)
-    return D
 
 
 # --------------------------------------------------------------------------- #
@@ -209,41 +155,9 @@ def mixed_step(stress, strain, dstrain, groups, targets, props, tol=1e-10):
     """Strain increment in which each group of components (sharing one strain increment) is
     adjusted by Newton iteration with DDSDDE so that the stress of its first component equals the
     target (as in tests/test_matsuoka_nakai.py)."""
-    d = np.array(dstrain, dtype=float)
-    u = np.array([d[g[0]] for g in groups])
-    first = [g[0] for g in groups]
-
-    def apply(values):
-        out = d.copy()
-        for g, v in zip(groups, values):
-            out[list(g)] = v
-        return out
-
-    for _ in range(50):
-        s, ddsdde, _ = step(stress, apply(u), props)
-        r = s[first] - targets
-        if np.max(np.abs(r)) < tol * (1.0 + np.max(np.abs(targets))):
-            break
-        jac = np.array([[ddsdde[i, list(g)].sum() for g in groups] for i in first])
-        u -= np.linalg.solve(jac, r)
-
-    d = apply(u)
+    d = fu.mixed_strain_increment(lambda d: step(stress, d, props)[:2], dstrain, groups, targets, tol)
     s, _, state = step(stress, d, props)
     return s, state, strain + d
-
-
-class History:
-    def __init__(self, strain, stress):
-        self.eps, self.sig, self.state = [strain.copy()], [stress.copy()], [0.0]
-
-    def add(self, strain, stress, state):
-        self.eps.append(strain.copy())
-        self.sig.append(stress.copy())
-        self.state.append(state)
-
-    def arrays(self):
-        self.eps, self.sig, self.state = np.array(self.eps), np.array(self.sig), np.array(self.state)
-        return self
 
 
 def drained_triaxial(props, cell, axial_strain, n_steps, extension=False):
@@ -254,7 +168,7 @@ def drained_triaxial(props, cell, axial_strain, n_steps, extension=False):
         d, groups = [0, 0, -axial_strain / n_steps, 0, 0, 0], [[0, 1]]
     else:
         d, groups = [axial_strain / n_steps, 0, 0, 0, 0, 0], [[1, 2]]
-    h = History(strain, stress)
+    h = History(strain, stress, 0.0)
     for _ in range(n_steps):
         stress, state, strain = mixed_step(stress, strain, d, groups, np.array([cell]), props)
         h.add(strain, stress, state)
@@ -264,7 +178,7 @@ def drained_triaxial(props, cell, axial_strain, n_steps, extension=False):
 def plane_strain(props, cell, axial_strain, n_steps):
     """eps_y = 0, sigma_z = cell, compression along x."""
     stress, strain = np.array([cell, cell, cell, 0, 0, 0], float), np.zeros(6)
-    h = History(strain, stress)
+    h = History(strain, stress, 0.0)
     for _ in range(n_steps):
         stress, state, strain = mixed_step(stress, strain, [axial_strain / n_steps, 0, 0, 0, 0, 0], [[2]],
                                            np.array([cell]), props)
@@ -276,7 +190,7 @@ def undrained_triaxial(props, p0, axial_strain, n_steps):
     stress, strain = np.array([p0, p0, p0, 0, 0, 0], float), np.zeros(6)
     d = axial_strain / n_steps
     dstrain = np.array([d, -d / 2, -d / 2, 0, 0, 0])
-    h = History(strain, stress)
+    h = History(strain, stress, 0.0)
     for _ in range(n_steps):
         stress, _, state = step(stress, dstrain, props)
         strain = strain + dstrain
@@ -299,48 +213,6 @@ def lode_sweep(props, p0=100.0, magnitude=0.02, n=49, umat=None):
     return out
 
 
-def p_q(sig):
-    p = sig[:, :3].mean(axis=1)
-    q = np.sqrt(0.5 * ((sig[:, 0] - sig[:, 1]) ** 2 + (sig[:, 1] - sig[:, 2]) ** 2
-                       + (sig[:, 2] - sig[:, 0]) ** 2) + 3 * (sig[:, 3:] ** 2).sum(axis=1))
-    return p, q
-
-
-# --------------------------------------------------------------------------- #
-# Plot style (static PDF figures; same style and palette as the HS report)      #
-# --------------------------------------------------------------------------- #
-INK, INK2, MUTED, GRID, AXIS = "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
-SERIES = ["#2a78d6", "#eb6834", "#1baf7a"]
-LINESTYLES = ["-", (0, (6, 2)), (0, (1, 1.2))]
-REF = dict(color=INK, lw=0.9, ls=(0, (4, 2)))       # analytic solutions
-ENVELOPE = dict(color=INK2, lw=0.9, ls=(0, (1, 1.5)))  # failure envelopes and limits
-
-plt.rcParams.update({
-    "figure.figsize": (3.9, 2.9), "font.size": 8.5, "axes.labelsize": 8.5, "axes.titlesize": 8.5,
-    "axes.edgecolor": AXIS, "axes.labelcolor": INK, "axes.linewidth": 0.8,
-    "xtick.color": INK2, "ytick.color": INK2, "xtick.labelsize": 7.5, "ytick.labelsize": 7.5,
-    "axes.grid": True, "grid.color": GRID, "grid.linewidth": 0.6, "grid.linestyle": "-",
-    "axes.axisbelow": True, "axes.spines.top": False, "axes.spines.right": False,
-    "lines.linewidth": 1.5, "lines.solid_capstyle": "round", "legend.frameon": False,
-    "legend.fontsize": 7.5, "legend.handlelength": 2.4, "savefig.bbox": "tight",
-    "pdf.fonttype": 42,
-})
-logging.getLogger("fontTools").setLevel(logging.ERROR)  # font timestamp warnings when embedding
-
-
-def save(fig, name):
-    fig.savefig(os.path.join(FIG_DIR, name + ".pdf"))
-    plt.close(fig)
-
-
-def summary(text):
-    print(text)
-
-
-def marker(color, size=5.0):
-    return dict(color=color, marker="o", ls="none", ms=size, mec="white", mew=0.8)
-
-
 # --------------------------------------------------------------------------- #
 # Figures                                                                       #
 # --------------------------------------------------------------------------- #
@@ -354,57 +226,29 @@ def fig_yield_surface():
     a = attraction(c, phi)
     sweep = lode_sweep(props_of())
 
-    def pi_xy(sig3):
-        """Projection of principal stresses (sigma_x, sigma_y, sigma_z) on the deviatoric plane,
-        sigma_x up."""
-        sig3 = np.atleast_2d(sig3)
-        return (sig3[:, 1] - sig3[:, 2]) / np.sqrt(2), (2 * sig3[:, 0] - sig3[:, 1] - sig3[:, 2]) / np.sqrt(6)
-
     angles = np.linspace(0, 2 * np.pi, 721)
     mn_curve = []
     for w in angles:
         e = np.array([np.cos(w), np.cos(w - 2 * np.pi / 3), np.cos(w + 2 * np.pi / 3)]) * np.sqrt(2 / 3)
         rho = bisect(lambda r: mn_ratio(1.0 + r * e) - mn_k(phi), 1e-9, (1 - 1e-12) / -e.min())
         mn_curve.append(1.0 + rho * e)
-    mx, my = pi_xy(np.array(mn_curve))
-
-    sin_phi = np.sin(np.radians(phi))
-    tc, te = 2 * sin_phi / (3 - sin_phi), 2 * sin_phi / (3 + sin_phi)
-    corners = []
-    for i in range(3):
-        comp, ext = np.full(3, 1 - tc), np.full(3, 1 + te)
-        comp[i], ext[i] = 1 + 2 * tc, 1 - 2 * te
-        corners += [comp, ext]
-    cx, cy = pi_xy(np.array(corners))
-    order = np.argsort(np.arctan2(cy, cx))
-    cx, cy = np.r_[cx[order], cx[order][0]], np.r_[cy[order], cy[order][0]]
+    mx, my = fu.pi_plane(np.array(mn_curve))
+    cx, cy = fu.mohr_coulomb_section(phi)
 
     pts, worst = [], 0.0
     for s, state in sweep:
         sig = np.diag(tensor(s)) + a  # principal axes are x, y, z for these paths
         pts.append(sig / sig.mean())
         worst = max(worst, abs(mn_criterion(s, c, phi)))
-    px, py = pi_xy(np.array(pts))
+    px, py = fu.pi_plane(np.array(pts))
     summary(f"\n[yield surface] phi = {phi}: {len(sweep)} directions, states {sorted(set(st for _, st in sweep))},"
             f" max |I1 I2 / (I3 k) - 1| = {worst:.1e}")
 
     fig, ax = plt.subplots()
-    r = 1.2 * np.hypot(cx, cy).max()
-    for ang, lab in [(90, r"$\sigma_x$"), (330, r"$\sigma_y$"), (210, r"$\sigma_z$")]:
-        ax.plot([0, r * np.cos(np.radians(ang))], [0, r * np.sin(np.radians(ang))], color=AXIS, lw=0.8)
-        ax.annotate(lab, (r * np.cos(np.radians(ang)), r * np.sin(np.radians(ang))), color=INK2,
-                    ha="center", va="center", xytext=(0, 7 if ang == 90 else -7), textcoords="offset points")
+    fu.deviatoric_axes(ax, 1.2 * np.hypot(cx, cy).max())
     ax.plot(cx, cy, **ENVELOPE, label="Mohr-Coulomb")
     ax.plot(mx, my, **REF, label=r"Matsuoka-Nakai, $I_1 I_2 / I_3 = 9 + 8\tan^2\varphi$")
     ax.plot(px, py, **marker(SERIES[0], 4.5), label="UMAT, returned stress")
-    ax.set_aspect("equal")
-    ax.set_xlim(-r, r)
-    ax.set_ylim(-0.75 * r, 1.12 * r)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.grid(False)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=1, fontsize=7)
     save(fig, "deviatoric_section")
 
@@ -589,9 +433,9 @@ def fig_undrained():
         ax_pq.plot(p, q, color=color, ls=ls, label=label)
         ax_q.plot(100 * h.eps[:, 0], q, color=color, ls=ls, label=label)
         extra = f"{p.min():.10f} .. {p.max():.10f}" if psi == 0 else f"{p[-1]:.2f}"
-        cone = h.state == 1
+        cone = h.sv == 1
         dev = np.max(np.abs(q[cone] / (m_q * (p[cone] + a)) - 1)) if cone.any() else np.nan
-        apex = h.eps[np.argmax(h.state == 2), 0] if (h.state == 2).any() else np.nan
+        apex = h.eps[np.argmax(h.sv == 2), 0] if (h.sv == 2).any() else np.nan
         summary(f"  {psi:4.1f} {extra} {dev:.1e} {apex:.4f}")
     pl = np.array([-a, 450.0])
     ax_pq.plot(pl, m_q * (pl + a), **ENVELOPE, label=rf"$q = {m_q:.1f}\,(p' + a)$")
@@ -622,7 +466,7 @@ def global_newton(umat, tangent="consistent", max_iter=15):
     target = np.array([100.0, 5.0, 0.0, 0.0])
     de = np.array([2.5e-3, 0, 0, 0, 0, 0])
     residuals = []
-    D_el = elastic_stiffness()
+    D_el = fu.elastic_stiffness(BASE["E"], BASE["nu"])
     for _ in range(max_iter):
         s, ddsdde, _ = step(stress, de, props, umat)
         r = s[free] - target
@@ -722,18 +566,15 @@ def verification_summary(umat):
     out["global Newton: iterations to 1e-10 kPa"] = len(res) if res[-1] < 1e-10 else f">{len(res)}"
 
     # elastic strain energy of an elastic increment from zero stress
-    _, _, _, sse, _ = umat(np.zeros(6), -np.array([1e-4, 0, 0, 0, 0, 0]), props)
-    sigma = elastic_stiffness() @ np.array([1e-4, 0, 0, 0, 0, 0])
+    _, _, _, sse, _ = umat(np.zeros(6), [0.0], np.zeros(6), -np.array([1e-4, 0, 0, 0, 0, 0]), props)
+    sigma = fu.elastic_stiffness(BASE["E"], BASE["nu"]) @ np.array([1e-4, 0, 0, 0, 0, 0])
     out["SSE / (sigma : eps / 2), elastic from zero stress"] = sse / (0.5 * sigma @ np.array([1e-4, 0, 0, 0, 0, 0]))
     return out
 
 
 def main():
-    global UMAT
     argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter).parse_args()
-    UMAT = Umat(DLL)
-
-    os.makedirs(FIG_DIR, exist_ok=True)
+    fu.apply_style()
     print(f"UMAT: {DLL}")
     summary("\n[verification summary]")
     for key, value in verification_summary(UMAT).items():
