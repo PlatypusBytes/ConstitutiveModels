@@ -13,67 +13,28 @@ is tension positive and `step` converts. The figures are written to docs/hs_test
 the values quoted in the report are printed.
 """
 
-import logging
 import os
 import sys
 
-import cffi
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+sys.path.insert(0, os.path.dirname(HERE))  # docs
+import figure_utils as fu  # noqa: E402
+from figure_utils import (AXIS, ENVELOPE, INK2, LINESTYLES, REF, SERIES, History, log_axes, marker, p_q,  # noqa: E402
+                          summary)
+import matplotlib.pyplot as plt  # noqa: E402
+
 FIG_DIR = os.path.join(HERE, "figures")
-DLL = os.path.join(ROOT, "build_C", "lib", "hardening_soil." + ("dll" if sys.platform == "win32" else "so"))
-
-# --------------------------------------------------------------------------- #
-# UMAT                                                                          #
-# --------------------------------------------------------------------------- #
-_ffi = cffi.FFI()
-_ffi.cdef("""
-void umat(double* STRESS, double* STATEV, double* DDSDDE,
-          double* SSE, double* SPD, double* SCD, double* RPL,
-          double* DDSDDT, double* DRPLDE, double* DRPLDT,
-          double* STRAN, double* DSTRAN, double* TIME, double* DTIME,
-          double* TEMP, double* DTEMP, double* PREDEF, double* DPRED,
-          char* CMNAME, int* NDI, int* NSHR, int* NTENS, int* NSTATV,
-          double* PROPS, int* NPROPS, double* COORDS, double* DROT,
-          double* PNEWDT, double* CELENT, double* DFGRD0, double* DFGRD1,
-          int* NOEL, int* NPT, int* LAYER, int* KSPT, int* KSTEP, int* KINC);
-""")
-_lib = None
-
-
-def _umat(stress, statev, strain, dstrain, props):
-    """One UMAT call in the tension-positive convention of the interface (same arguments as
-    tests/utils.py, Utils.run_c_umat, but with the library loaded once)."""
-    global _lib
-    if _lib is None:
-        if not os.path.exists(DLL):
-            sys.exit(f"{DLL} not found: build the C models first (see README.md)")
-        _lib = _ffi.dlopen(DLL)
-    ints = [_ffi.new("int*", v) for v in (3, 3, 6, len(statev), len(props), 1, 1, 1, 1)]
-    c_stress = _ffi.new("double[]", list(stress))
-    c_statev = _ffi.new("double[]", list(statev))
-    c_ddsdde = _ffi.new("double[]", 36)
-    scalars = [_ffi.new("double*", 0.0) for _ in range(3)]
-    _lib.umat(c_stress, c_statev, c_ddsdde, *scalars, _ffi.NULL, _ffi.NULL, _ffi.NULL, _ffi.NULL,
-              _ffi.new("double[]", list(strain)), _ffi.new("double[]", list(dstrain)),
-              _ffi.new("double[]", [0.0, 0.0]), _ffi.new("double*", 1.0),
-              _ffi.NULL, _ffi.NULL, _ffi.NULL, _ffi.NULL, _ffi.new("char[]", b"HS".ljust(80)),
-              ints[0], ints[1], ints[2], ints[3], _ffi.new("double[]", list(props)), ints[4],
-              _ffi.NULL, _ffi.NULL, _ffi.NULL, _ffi.NULL, _ffi.NULL, _ffi.NULL,
-              ints[5], ints[6], _ffi.NULL, _ffi.NULL, ints[7], ints[8])
-    return np.array(list(c_stress)), np.array(list(c_statev))
+DLL = fu.library_path("hardening_soil")
+UMAT = fu.Umat(DLL, "HS")
+save = fu.figure_saver(FIG_DIR)
 
 
 def step(stress, statev, strain, dstrain, props):
     """UMAT call in the compression-positive convention of the paper."""
-    s, sv = _umat(-np.asarray(stress, float), statev, -np.asarray(strain, float),
-                  -np.asarray(dstrain, float), props)
+    s, sv, _, _, _ = UMAT(-np.asarray(stress, float), statev, -np.asarray(strain, float),
+                          -np.asarray(dstrain, float), props)
     return -s, sv
 
 
@@ -119,49 +80,12 @@ def sin_psi_mobilised(sin_phi_m, sin_phi, sin_psi):
 # --------------------------------------------------------------------------- #
 # Element test paths                                                            #
 # --------------------------------------------------------------------------- #
-class History:
-    def __init__(self, strain, stress, statev):
-        self.eps, self.sig, self.sv = [strain.copy()], [stress.copy()], [statev.copy()]
-
-    def add(self, strain, stress, statev):
-        self.eps.append(strain.copy())
-        self.sig.append(stress.copy())
-        self.sv.append(statev.copy())
-
-    def arrays(self):
-        self.eps, self.sig, self.sv = np.array(self.eps), np.array(self.sig), np.array(self.sv)
-        return self
-
-
 def mixed_step(stress, statev, strain, dstrain, groups, targets, props, tol=1e-9):
     """Strain increment in which each group of components (sharing one strain increment) is
-    adjusted by Newton iteration so that the stress of its first component equals the target
-    (as in tests/test_hardening_soil.py)."""
-    d = np.array(dstrain, dtype=float)
-    u = np.array([d[g[0]] for g in groups])
-    first = [g[0] for g in groups]
-
-    def apply(values):
-        out = d.copy()
-        for g, v in zip(groups, values):
-            out[list(g)] = v
-        return out
-
-    for _ in range(50):
-        s, _ = step(stress, statev, strain, apply(u), props)
-        r = s[first] - targets
-        if np.max(np.abs(r)) < tol * (1.0 + np.max(np.abs(targets))):
-            break
-        jac = np.zeros((len(groups), len(groups)))
-        h = 1e-8
-        for a in range(len(groups)):
-            u_h = u.copy()
-            u_h[a] += h
-            s_h, _ = step(stress, statev, strain, apply(u_h), props)
-            jac[:, a] = (s_h[first] - s[first]) / h
-        u -= np.linalg.solve(jac, r)
-
-    d = apply(u)
+    adjusted by Newton iteration, with a finite-difference Jacobian, so that the stress of its first
+    component equals the target (as in tests/test_hardening_soil.py)."""
+    d = fu.mixed_strain_increment(lambda d: (step(stress, statev, strain, d, props)[0], None), dstrain, groups,
+                                  targets, tol)
     s, sv = step(stress, statev, strain, d, props)
     return s, sv, strain + d
 
@@ -227,13 +151,6 @@ def oedometer(props, sigma_v0, k0, targets, d_eps=2e-5):
                           targets, d_eps)
 
 
-def p_q(sig):
-    p = sig[:, :3].mean(axis=1)
-    q = np.sqrt(0.5 * ((sig[:, 0] - sig[:, 1]) ** 2 + (sig[:, 1] - sig[:, 2]) ** 2
-                       + (sig[:, 2] - sig[:, 0]) ** 2) + 3 * (sig[:, 3:] ** 2).sum(axis=1))
-    return p, q
-
-
 # --------------------------------------------------------------------------- #
 # Calibration of the cap parameters (Sec. 4-5)                                  #
 # --------------------------------------------------------------------------- #
@@ -274,47 +191,6 @@ def calibrate_cap(base, k0_target, eoed_target, x0=(1.5, 2.0)):
             t *= 0.5
         x = x + t * dx
     return x, residual(x)
-
-
-# --------------------------------------------------------------------------- #
-# Plot style (static PDF figures; palette validated for colour-vision         #
-# deficiency, see the report)                                                   #
-# --------------------------------------------------------------------------- #
-INK, INK2, MUTED, GRID, AXIS = "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
-SERIES = ["#2a78d6", "#eb6834", "#1baf7a"]
-REF = dict(color=INK, lw=0.9, ls=(0, (4, 2)))       # analytic solutions
-ENVELOPE = dict(color=INK2, lw=0.9, ls=(0, (1, 1.5)))  # failure envelopes and limits
-
-plt.rcParams.update({
-    "figure.figsize": (3.9, 2.9), "font.size": 8.5, "axes.labelsize": 8.5, "axes.titlesize": 8.5,
-    "axes.edgecolor": AXIS, "axes.labelcolor": INK, "axes.linewidth": 0.8,
-    "xtick.color": INK2, "ytick.color": INK2, "xtick.labelsize": 7.5, "ytick.labelsize": 7.5,
-    "axes.grid": True, "grid.color": GRID, "grid.linewidth": 0.6, "grid.linestyle": "-",
-    "axes.axisbelow": True, "axes.spines.top": False, "axes.spines.right": False,
-    "lines.linewidth": 1.5, "lines.solid_capstyle": "round", "legend.frameon": False,
-    "legend.fontsize": 7.5, "legend.handlelength": 2.4, "savefig.bbox": "tight",
-    "pdf.fonttype": 42,
-})
-logging.getLogger("fontTools").setLevel(logging.ERROR)  # font timestamp warnings when embedding
-
-
-def log_axes(ax, xticks, yticks):
-    """Log-log axes with plain tick labels."""
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    for axis, ticks in [(ax.xaxis, xticks), (ax.yaxis, yticks)]:
-        axis.set_major_locator(matplotlib.ticker.FixedLocator(ticks))
-        axis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:g}"))
-        axis.set_minor_locator(matplotlib.ticker.NullLocator())
-
-
-def save(fig, name):
-    fig.savefig(os.path.join(FIG_DIR, name + ".pdf"))
-    plt.close(fig)
-
-
-def summary(text):
-    print(text)
 
 
 # --------------------------------------------------------------------------- #
@@ -400,12 +276,7 @@ def fig_dilatancy():
             f" without: {ev[-1]:.3f} %")
 
     # plastic strains, mobilised friction and dilatancy angles
-    E, nu = TEST["Eur_ref"], TEST["nu"]
-    G, lam = E / (2 * (1 + nu)), E * nu / ((1 + nu) * (1 - 2 * nu))
-    De = np.zeros((6, 6))
-    De[:3, :3] = lam
-    De[np.arange(3), np.arange(3)] += 2 * G
-    De[3:, 3:] = G * np.eye(3)
+    De = fu.elastic_stiffness(TEST["Eur_ref"], TEST["nu"])
     eps_p = h.eps - np.linalg.solve(De, (h.sig - h.sig[0]).T).T
     dev_p, dgamma = np.diff(eps_p[:, :3].sum(axis=1)), np.diff(h.sv[:, 0])
     s1, s3 = h.sig[:, 0], h.sig[:, 2]
@@ -437,8 +308,7 @@ def fig_dilatancy():
     fig, ax = plt.subplots()
     ax.plot(np.degrees(np.arcsin(sp)), psi_rowe, **ENVELOPE, label="Eq. 11 (Rowe)")
     ax.plot(np.degrees(np.arcsin(sp)), psi_bounded, **REF, label="Eq. 11 bounded")
-    ax.plot(np.degrees(np.arcsin(sin_phi_m_mid)), psi_m_umat, "o", color=SERIES[0], ms=4.5, mec="white",
-            mew=0.8, label=r"UMAT, $-\Delta\varepsilon_v^p / \Delta\gamma^p$")
+    ax.plot(np.degrees(np.arcsin(sin_phi_m_mid)), psi_m_umat, **marker(SERIES[0], 4.5), label=r"UMAT, $-\Delta\varepsilon_v^p / \Delta\gamma^p$")
     ax.axvline(np.degrees(np.arcsin(sin_cv)), color=AXIS, lw=0.8)
     ax.axhline(0.0, color=AXIS, lw=0.8)
     ax.annotate(r"$\varphi_{cv}$", (np.degrees(np.arcsin(sin_cv)), -27), xytext=(4, 0),
@@ -504,11 +374,10 @@ def fig_cap():
     ax.plot(pl, ks_ref * (pl / p_ref) ** m / 1000, **REF, label=r"$K_s = E_{ur}/3(1-2\nu)$")
     ax.plot(pl, kc_ref * (pl / p_ref) ** m / 1000, **ENVELOPE, label=r"$K_c = K_s / (K_s/K_c)$")
     sel = np.arange(len(k_t))
-    for mask, color, label, marker in [(virgin, SERIES[0], "UMAT, primary loading", "o"),
+    for mask, color, label, symbol in [(virgin, SERIES[0], "UMAT, primary loading", "o"),
                                        (elastic, SERIES[1], "UMAT, unloading / reloading", "s")]:
         idx = sel[mask][::25]
-        ax.plot(p_mid[idx], k_t[idx] / 1000, marker, color=color, ms=4.5, mec="white", mew=0.8, ls="none",
-                label=label)
+        ax.plot(p_mid[idx], k_t[idx] / 1000, **dict(marker(color, 4.5), marker=symbol), label=label)
     log_axes(ax, [100, 200, 400, 800], [20, 50, 100, 200, 500])
     ax.set_ylim(25, 600)
     ax.set_xlabel(r"mean stress $p$ [kPa]")
@@ -712,7 +581,7 @@ def fig_hostun(m_cap, k_ratio):
     fig, ax = plt.subplots()
     fine = drained_triaxial(props, 300.0, 0.18, 720)
     summary("[step size] n_steps, max |q_n - q_fine| / qf, max |ev_n - ev_fine|")
-    for n, color, ls in zip([10, 40, 360], SERIES, ["-", (0, (6, 2)), (0, (1, 1.2))]):
+    for n, color, ls in zip([10, 40, 360], SERIES, LINESTYLES):
         hn = drained_triaxial(props, 300.0, 0.18, n)
         ax.plot(hn.eps[:, 0], hn.sig[:, 0] / hn.sig[:, 2], color=color, ls=ls, marker="o" if n <= 10 else None,
                 ms=4, mec="white", mew=0.8,
@@ -757,7 +626,7 @@ def fig_general_stress_states():
     sin_phi = np.sin(np.radians(TEST["phi"]))
     fig, ax = plt.subplots()
     summary("\n[stress states] path, (s1-s3)/(sin(phi)(s1+s3)) end, b end, at_failure flag")
-    for (name, h), color, ls in zip(paths.items(), SERIES, ["-", (0, (6, 2)), (0, (1, 1.2))]):
+    for (name, h), color, ls in zip(paths.items(), SERIES, LINESTYLES):
         s = np.sort(h.sig[:, :3], axis=1)[:, ::-1]
         gamma = h.eps[:, :3].max(axis=1) - h.eps[:, :3].min(axis=1)
         mob = (s[:, 0] - s[:, 2]) / (sin_phi * (s[:, 0] + s[:, 2]))
@@ -773,51 +642,20 @@ def fig_general_stress_states():
     save(fig, "stress_states_mobilisation")
 
     # deviatoric plane, stresses normalised by p (c = 0: the Mohr-Coulomb section is a fixed hexagon)
-    def pi_plane(sig):
-        p = sig[:, :3].mean(axis=1)
-        x = (sig[:, 1] - sig[:, 2]) / np.sqrt(2) / p
-        y = (2 * sig[:, 0] - sig[:, 1] - sig[:, 2]) / np.sqrt(6) / p
-        return x, y
-
-    # corners of the Mohr-Coulomb section at p = 1: triaxial compression (sigma_1 > sigma_2 = sigma_3)
-    # and extension (sigma_1 = sigma_2 > sigma_3), each in the three principal directions
-    tc, te = 2 * sin_phi / (3 - sin_phi), 2 * sin_phi / (3 + sin_phi)
-    corners = []
-    for i in range(3):
-        compression, extension = np.full(3, 1 - tc), np.full(3, 1 + te)
-        compression[i], extension[i] = 1 + 2 * tc, 1 - 2 * te
-        corners += [compression, extension]
-    corners = np.array(corners)
-    cx, cy = pi_plane(np.c_[corners, np.zeros((len(corners), 3))])
-    order = np.argsort(np.arctan2(cy, cx))
-    cx, cy = np.r_[cx[order], cx[order][0]], np.r_[cy[order], cy[order][0]]
-
+    cx, cy = fu.mohr_coulomb_section(TEST["phi"])
     fig, ax = plt.subplots()
-    r = 1.15 * np.hypot(cx, cy).max()
-    # projections of the principal axes: sigma_x up, sigma_y lower right, sigma_z lower left
-    for ang, lab in [(90, r"$\sigma_x$"), (330, r"$\sigma_y$"), (210, r"$\sigma_z$")]:
-        ax.plot([0, r * np.cos(np.radians(ang))], [0, r * np.sin(np.radians(ang))], color=AXIS, lw=0.8)
-        ax.annotate(lab, (r * np.cos(np.radians(ang)), r * np.sin(np.radians(ang))), color=INK2,
-                    ha="center", va="center", xytext=(0, 7 if ang == 90 else -7), textcoords="offset points")
+    fu.deviatoric_axes(ax, 1.15 * np.hypot(cx, cy).max())
     ax.plot(cx, cy, **ENVELOPE, label="Mohr-Coulomb\n($q = q_f$)")
-    for (name, h), color, ls in zip(paths.items(), SERIES, ["-", (0, (6, 2)), (0, (1, 1.2))]):
-        x, y = pi_plane(h.sig)
+    for (name, h), color, ls in zip(paths.items(), SERIES, LINESTYLES):
+        x, y = fu.pi_plane(h.sig / h.sig[:, :3].mean(axis=1, keepdims=True))
         ax.plot(x, y, color=color, ls=ls, label=name)
-        ax.plot(x[-1], y[-1], "o", color=color, ms=5, mec="white", mew=0.8)
-    ax.set_aspect("equal")
-    ax.set_xlim(-r, r)
-    ax.set_ylim(-0.75 * r, 1.12 * r)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.grid(False)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
+        ax.plot(x[-1], y[-1], **marker(color))
     ax.legend(loc="center left", bbox_to_anchor=(1.0, 0.5), fontsize=7)
     save(fig, "stress_states_pi_plane")
 
 
 def main():
-    os.makedirs(FIG_DIR, exist_ok=True)
+    fu.apply_style()
     print(f"UMAT: {DLL}")
     fig_hyperbola()
     fig_dilatancy()
