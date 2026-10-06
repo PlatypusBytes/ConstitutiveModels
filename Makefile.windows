@@ -39,7 +39,13 @@ LINEAR_ELASTIC_TENS_2D_INTERFACE_DIR = $(C_MODELS_DIR)\linear_elastic_with_verti
 LINEAR_ELASTIC_TENS_3D_INTERFACE_DIR = $(C_MODELS_DIR)\linear_elastic_with_vertical_tens_cutoff_3d_interface
 MATSUOKA_NAKAI_DIR = $(C_MODELS_DIR)\matsuoka_nakai
 VISCOELASTIC_KELVIN_VOIGT_DIR = $(C_MODELS_DIR)\viscoelastic_kelvin_voigt
+HARDENING_SOIL_DIR = $(C_MODELS_DIR)\hardening_soil
+SOFT_SOIL_DIR = $(C_MODELS_DIR)\soft_soil
 YIELD_SURFACES_DIR = $(C_MODELS_DIR)\yield_surfaces
+HARDENING_RULES_DIR = $(C_MODELS_DIR)\hardening_rules
+FLOW_RULES_DIR = $(C_MODELS_DIR)\flow_rules
+CREEP_LAWS_DIR = $(C_MODELS_DIR)\creep_laws
+RETURN_MAPPINGS_DIR = $(C_MODELS_DIR)\return_mappings
 
 # Include directories (using /I prefix required by cl.exe)
 INCLUDES = /I$(C_MODELS_DIR) /I$(ELASTIC_LAWS_DIR) /I$(YIELD_SURFACES_DIR)
@@ -49,7 +55,28 @@ COMMON_OBJS = \
 	$(BUILD_DIR)\globals$(OBJ_EXT) \
 	$(BUILD_DIR)\utils$(OBJ_EXT) \
 	$(BUILD_DIR)\stress_utils$(OBJ_EXT) \
+	$(BUILD_DIR)\strain_utils$(OBJ_EXT) \
 	$(BUILD_DIR)\hookes_law$(OBJ_EXT)
+
+# Building blocks of the Hardening Soil model
+HARDENING_SOIL_OBJS = \
+	$(BUILD_DIR)\power_law_stiffness$(OBJ_EXT) \
+	$(BUILD_DIR)\mohr_coulomb_surface$(OBJ_EXT) \
+	$(BUILD_DIR)\hyperbolic_shear_surface$(OBJ_EXT) \
+	$(BUILD_DIR)\elliptic_cap_surface$(OBJ_EXT) \
+	$(BUILD_DIR)\hyperbolic_shear_hardening$(OBJ_EXT) \
+	$(BUILD_DIR)\cap_hardening$(OBJ_EXT) \
+	$(BUILD_DIR)\rowe_dilatancy$(OBJ_EXT)
+
+# Building blocks of the Soft Soil Creep model
+SOFT_SOIL_CREEP_OBJS = \
+	$(BUILD_DIR)\logarithmic_elasticity$(OBJ_EXT) \
+	$(BUILD_DIR)\modified_cam_clay_surface$(OBJ_EXT) \
+	$(BUILD_DIR)\mohr_coulomb_surface$(OBJ_EXT) \
+	$(BUILD_DIR)\modified_cam_clay_flow$(OBJ_EXT) \
+	$(BUILD_DIR)\exponential_volumetric_hardening$(OBJ_EXT) \
+	$(BUILD_DIR)\isotache_creep$(OBJ_EXT) \
+	$(BUILD_DIR)\mohr_coulomb_return_mapping$(OBJ_EXT)
 
 # Target shared libraries
 LIBS = \
@@ -57,7 +84,9 @@ LIBS = \
     $(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff_2d_interface$(SO_EXT) \
     $(LIB_DIR)\linear_elastic_with_vertical_tens_cutoff_3d_interface$(SO_EXT) \
 	$(LIB_DIR)\matsuoka_nakai$(SO_EXT) \
-	$(LIB_DIR)\viscoelastic_kelvin_voigt$(SO_EXT)
+	$(LIB_DIR)\viscoelastic_kelvin_voigt$(SO_EXT) \
+	$(LIB_DIR)\hardening_soil$(SO_EXT) \
+	$(LIB_DIR)\soft_soil_creep$(SO_EXT)
 
 # --- Targets ---
 
@@ -86,6 +115,50 @@ $(BUILD_DIR)\stress_utils$(OBJ_EXT): $(C_MODELS_DIR)\stress_utils.c $(C_MODELS_D
 $(BUILD_DIR)\hookes_law$(OBJ_EXT): $(ELASTIC_LAWS_DIR)\hookes_law.c $(ELASTIC_LAWS_DIR)\hookes_law.h
 	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(ELASTIC_LAWS_DIR)\hookes_law.c
 
+$(BUILD_DIR)\strain_utils$(OBJ_EXT): $(C_MODELS_DIR)\strain_utils.c $(C_MODELS_DIR)\strain_utils.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(C_MODELS_DIR)\strain_utils.c
+
+# Hardening Soil building blocks: stiffness, yield surfaces, hardening and flow rules
+$(BUILD_DIR)\power_law_stiffness$(OBJ_EXT): $(ELASTIC_LAWS_DIR)\power_law_stiffness.c $(ELASTIC_LAWS_DIR)\power_law_stiffness.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(ELASTIC_LAWS_DIR)\power_law_stiffness.c
+
+$(BUILD_DIR)\mohr_coulomb_surface$(OBJ_EXT): $(YIELD_SURFACES_DIR)\mohr_coulomb_surface.c $(YIELD_SURFACES_DIR)\mohr_coulomb_surface.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(YIELD_SURFACES_DIR)\mohr_coulomb_surface.c
+
+$(BUILD_DIR)\hyperbolic_shear_surface$(OBJ_EXT): $(YIELD_SURFACES_DIR)\hyperbolic_shear_surface.c $(YIELD_SURFACES_DIR)\hyperbolic_shear_surface.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(YIELD_SURFACES_DIR)\hyperbolic_shear_surface.c
+
+$(BUILD_DIR)\elliptic_cap_surface$(OBJ_EXT): $(YIELD_SURFACES_DIR)\elliptic_cap_surface.c $(YIELD_SURFACES_DIR)\elliptic_cap_surface.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(YIELD_SURFACES_DIR)\elliptic_cap_surface.c
+
+$(BUILD_DIR)\hyperbolic_shear_hardening$(OBJ_EXT): $(HARDENING_RULES_DIR)\hyperbolic_shear_hardening.c $(HARDENING_RULES_DIR)\hyperbolic_shear_hardening.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(HARDENING_RULES_DIR)\hyperbolic_shear_hardening.c
+
+$(BUILD_DIR)\cap_hardening$(OBJ_EXT): $(HARDENING_RULES_DIR)\cap_hardening.c $(HARDENING_RULES_DIR)\cap_hardening.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(HARDENING_RULES_DIR)\cap_hardening.c
+
+$(BUILD_DIR)\rowe_dilatancy$(OBJ_EXT): $(FLOW_RULES_DIR)\rowe_dilatancy.c $(FLOW_RULES_DIR)\rowe_dilatancy.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(FLOW_RULES_DIR)\rowe_dilatancy.c
+
+# Soft Soil Creep building blocks: elasticity, surface, flow, hardening, creep and failure
+$(BUILD_DIR)\logarithmic_elasticity$(OBJ_EXT): $(ELASTIC_LAWS_DIR)\logarithmic_elasticity.c $(ELASTIC_LAWS_DIR)\logarithmic_elasticity.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(ELASTIC_LAWS_DIR)\logarithmic_elasticity.c
+
+$(BUILD_DIR)\modified_cam_clay_surface$(OBJ_EXT): $(YIELD_SURFACES_DIR)\modified_cam_clay_surface.c $(YIELD_SURFACES_DIR)\modified_cam_clay_surface.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(YIELD_SURFACES_DIR)\modified_cam_clay_surface.c
+
+$(BUILD_DIR)\modified_cam_clay_flow$(OBJ_EXT): $(FLOW_RULES_DIR)\modified_cam_clay_flow.c $(FLOW_RULES_DIR)\modified_cam_clay_flow.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(FLOW_RULES_DIR)\modified_cam_clay_flow.c
+
+$(BUILD_DIR)\exponential_volumetric_hardening$(OBJ_EXT): $(HARDENING_RULES_DIR)\exponential_volumetric_hardening.c $(HARDENING_RULES_DIR)\exponential_volumetric_hardening.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(HARDENING_RULES_DIR)\exponential_volumetric_hardening.c
+
+$(BUILD_DIR)\isotache_creep$(OBJ_EXT): $(CREEP_LAWS_DIR)\isotache_creep.c $(CREEP_LAWS_DIR)\isotache_creep.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(CREEP_LAWS_DIR)\isotache_creep.c
+
+$(BUILD_DIR)\mohr_coulomb_return_mapping$(OBJ_EXT): $(RETURN_MAPPINGS_DIR)\mohr_coulomb_return_mapping.c $(RETURN_MAPPINGS_DIR)\mohr_coulomb_return_mapping.h
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(RETURN_MAPPINGS_DIR)\mohr_coulomb_return_mapping.c
+
 $(BUILD_DIR)\viscoelastic_kelvin_voigt$(OBJ_EXT): $(VISCOELASTIC_KELVIN_VOIGT_DIR)\viscoelastic_kelvin_voigt.c
 	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(VISCOELASTIC_KELVIN_VOIGT_DIR)\viscoelastic_kelvin_voigt.c
 
@@ -109,6 +182,14 @@ $(BUILD_DIR)\linear_elastic_with_vertical_tens_cutoff_3d_interface$(OBJ_EXT): $(
 $(BUILD_DIR)\matsuoka_nakai$(OBJ_EXT): $(MATSUOKA_NAKAI_DIR)\matsuoka_nakai.c
 	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(MATSUOKA_NAKAI_DIR)\matsuoka_nakai.c
 
+# Hardening Soil model
+$(BUILD_DIR)\hardening_soil$(OBJ_EXT): $(HARDENING_SOIL_DIR)\hardening_soil.c
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(HARDENING_SOIL_DIR)\hardening_soil.c
+
+# Soft Soil Creep model
+$(BUILD_DIR)\soft_soil_creep$(OBJ_EXT): $(SOFT_SOIL_DIR)\soft_soil_creep.c
+	$(CC) $(CFLAGS) $(INCLUDES) /Fo$@ $(SOFT_SOIL_DIR)\soft_soil_creep.c
+
 # --- Linking Rules ---
 
 # Shared libraries
@@ -126,6 +207,12 @@ $(LIB_DIR)\matsuoka_nakai$(SO_EXT): $(COMMON_OBJS) $(BUILD_DIR)\matsuoka_nakai_s
 	$(CC) $(LDFLAGS) /Fe$@ $**
 
 $(LIB_DIR)\viscoelastic_kelvin_voigt$(SO_EXT): $(COMMON_OBJS) $(BUILD_DIR)\viscoelastic_kelvin_voigt$(OBJ_EXT)
+	$(CC) $(LDFLAGS) /Fe$@ $**
+
+$(LIB_DIR)\hardening_soil$(SO_EXT): $(COMMON_OBJS) $(HARDENING_SOIL_OBJS) $(BUILD_DIR)\hardening_soil$(OBJ_EXT)
+	$(CC) $(LDFLAGS) /Fe$@ $**
+
+$(LIB_DIR)\soft_soil_creep$(SO_EXT): $(COMMON_OBJS) $(SOFT_SOIL_CREEP_OBJS) $(BUILD_DIR)\soft_soil_creep$(OBJ_EXT)
 	$(CC) $(LDFLAGS) /Fe$@ $**
 
 
