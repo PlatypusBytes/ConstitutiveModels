@@ -36,6 +36,32 @@ void calculate_elastic_stiffness_matrix_3d(double E, double nu,
     elastic_matrix[5 * VOIGTSIZE_3D + 5] = G;  // C_1313 (row 5, col 5)
 }
 
+void calculate_elastic_compliance_matrix_3d(double E, double nu,
+                                            double compliance_matrix[VOIGTSIZE_3D * VOIGTSIZE_3D])
+{
+    double G = E / (2.0 * (1.0 + nu));  // Shear modulus
+
+    // Initialize to zero
+    for (int i = 0; i < VOIGTSIZE_3D * VOIGTSIZE_3D; ++i)
+    {
+        compliance_matrix[i] = 0.0;
+    }
+
+    // Normal strains: 1/E on the diagonal, -nu/E off the diagonal
+    for (int i = 0; i < 3; ++i)
+    {
+        for (int j = 0; j < 3; ++j)
+        {
+            compliance_matrix[i * VOIGTSIZE_3D + j] = (i == j) ? 1.0 / E : -nu / E;
+        }
+    }
+
+    // Shear strains (engineering shear strain convention gamma = 2*epsilon_shear)
+    compliance_matrix[3 * VOIGTSIZE_3D + 3] = 1.0 / G;  // (row 3, col 3)
+    compliance_matrix[4 * VOIGTSIZE_3D + 4] = 1.0 / G;  // (row 4, col 4)
+    compliance_matrix[5 * VOIGTSIZE_3D + 5] = 1.0 / G;  // (row 5, col 5)
+}
+
 void calculate_elastic_stiffness_matrix_2d_interface(double E, double nu,
                                            double elastic_matrix[VOIGTSIZE_2D_INTERFACE * VOIGTSIZE_2D_INTERFACE])
 {

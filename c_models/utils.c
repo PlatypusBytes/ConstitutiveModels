@@ -1,3 +1,6 @@
+#include <math.h>
+#include <stdlib.h>
+
 #include "globals.h"
 #include "utils.h"
 
@@ -6,7 +9,7 @@ double calculate_determinant_voigt_vector_3d(const double vector[VOIGTSIZE_3D])
     // Calculate the determinant of a 3x3 matrix represented as a Voigt vector
     // vector = [sxx, syy, szz, sxy, syz, sxz]
     double det = 0.0;
-    det = vector[XX] * (vector[YY] * vector[ZZ] - vector[XY] * vector[XY]) -
+    det = vector[XX] * (vector[YY] * vector[ZZ] - vector[YZ] * vector[YZ]) -
           vector[XY] * (vector[XY] * vector[ZZ] - vector[YZ] * vector[XZ]) +
           vector[XZ] * (vector[XY] * vector[YZ] - vector[YY] * vector[XZ]);
 
@@ -77,4 +80,70 @@ void vector_outer_product(const double* vector_1, const double* vector_2, const 
             result[i * length_vector + j] = vector_1[i] * vector_2[j];
         }
     }
+}
+
+int invert_matrix(const double* matrix, const int size, double* inverse)
+{
+    // Work copy of the matrix, reduced to the identity while the inverse is built up
+    double* a = (double*)malloc((size_t)size * (size_t)size * sizeof(double));
+    if (a == NULL) return 0;
+
+    double max_entry = 0.0;
+    for (int i = 0; i < size * size; ++i)
+    {
+        a[i] = matrix[i];
+        inverse[i] = (i % (size + 1) == 0) ? 1.0 : 0.0;
+        if (fabs(a[i]) > max_entry) max_entry = fabs(a[i]);
+    }
+
+    int success = (max_entry > 0.0);
+    for (int col = 0; success && col < size; ++col)
+    {
+        // Partial pivoting: row with the largest entry in this column on or below the diagonal
+        int piv = col;
+        for (int r = col + 1; r < size; ++r)
+        {
+            if (fabs(a[r * size + col]) > fabs(a[piv * size + col])) piv = r;
+        }
+        if (fabs(a[piv * size + col]) < 1.0e-14 * max_entry)
+        {
+            success = 0;
+            break;
+        }
+
+        if (piv != col)
+        {
+            for (int k = 0; k < size; ++k)
+            {
+                double tmp = a[col * size + k];
+                a[col * size + k] = a[piv * size + k];
+                a[piv * size + k] = tmp;
+                tmp = inverse[col * size + k];
+                inverse[col * size + k] = inverse[piv * size + k];
+                inverse[piv * size + k] = tmp;
+            }
+        }
+
+        // Normalise the pivot row and eliminate the column from all other rows
+        const double pivot = a[col * size + col];
+        for (int k = 0; k < size; ++k)
+        {
+            a[col * size + k] /= pivot;
+            inverse[col * size + k] /= pivot;
+        }
+        for (int r = 0; r < size; ++r)
+        {
+            if (r == col) continue;
+            const double factor = a[r * size + col];
+            if (factor == 0.0) continue;
+            for (int k = 0; k < size; ++k)
+            {
+                a[r * size + k] -= factor * a[col * size + k];
+                inverse[r * size + k] -= factor * inverse[col * size + k];
+            }
+        }
+    }
+
+    free(a);
+    return success;
 }
