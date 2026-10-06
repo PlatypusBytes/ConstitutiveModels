@@ -583,31 +583,148 @@ def test_tension_beyond_apex_returns_to_apex(dll, c, psi_deg):
     assert np.allclose(ddsdde, elastic_stiffness(), rtol=1e-12)
 
 
+ISOTROPIC_STRESS = [100.0, 100.0, 100.0, 0.0, 0.0, 0.0]
+GENERAL_STRESS = [150.0, 80.0, 60.0, 10.0, -5.0, 8.0]
+
+
 @pytest.mark.parametrize("psi_deg", [PSI_DEG, -10.0])
-def test_large_increments_return_to_the_surface(dll, psi_deg):
+@pytest.mark.parametrize("magnitude", [1e-2, 1e-1])
+@pytest.mark.parametrize("stress0, direction", [
+    (ISOTROPIC_STRESS, [2.0, -1.0, -1.0, 0.0, 0.0, 0.0]),  # triaxial compression
+    (ISOTROPIC_STRESS, [1.0, 1.0, -2.0, 0.0, 0.0, 0.0]),  # triaxial extension
+    (ISOTROPIC_STRESS, [0.0, 0.0, 0.0, 2.0, 0.0, 0.0]),  # simple shear
+    (GENERAL_STRESS, [1.2, -0.6, 0.3, 0.9, -0.3, 0.6]),  # general direction from a general stress
+], ids=["compression", "extension", "shear", "general"])
+def test_large_deviatoric_increments_return_to_the_surface(dll, psi_deg, magnitude, stress0, direction):
     """
-    Large strain increments in arbitrary directions (up to the order of 10 % strain) end on the
-    yield surface, at the apex, or elastically inside the surface, without a failure of the local
-    iteration (which would leave the stress unchanged), also with contractant flow.
+    Large deviatoric strain increments (1 % and 10 % strain in a single step) are returned onto the
+    yield surface without a failure of the local iteration. With contractant flow (psi < 0) the
+    return decreases the mean stress, so that a 10 % increment from an isotropic state returns to the
+    apex, sigma = -a.
     """
-    rng = np.random.default_rng(2024)
     props = props_of(psi=psi_deg)
     a = attraction(C, PHI_DEG)
-    n_plastic = 0
+    direction = np.asarray(direction) / np.linalg.norm(direction)
+    s, _, statev = step(dll, np.asarray(stress0), magnitude * direction, props)
+
+    contractant_to_apex = psi_deg < 0.0 and magnitude == 1e-1 and stress0 is ISOTROPIC_STRESS
+    if contractant_to_apex:
+        assert statev[0] == 2.0
+        assert np.allclose(s, [-a, -a, -a, 0.0, 0.0, 0.0], atol=1e-9)
+    else:
+        assert statev[0] == 1.0
+        assert matsuoka_nakai_criterion(s, C, PHI_DEG) == pytest.approx(0.0, abs=1e-9)
+
+
+@pytest.mark.parametrize("psi_deg", [PSI_DEG, -10.0])
+@pytest.mark.parametrize("stress0", [ISOTROPIC_STRESS, GENERAL_STRESS], ids=["isotropic", "general"])
+def test_large_isotropic_increments(dll, psi_deg, stress0):
+    """
+    The cone is open in isotropic compression: a 10 % isotropic compression is elastic. A 1 %
+    isotropic extension takes the trial stress beyond the apex and is returned to the apex.
+    """
+    props = props_of(psi=psi_deg)
+    a = attraction(C, PHI_DEG)
+    stress0 = np.asarray(stress0)
+
+    compression = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0]) * 1e-1 / np.sqrt(3.0)
+    s, _, statev = step(dll, stress0, compression, props)
+    assert statev[0] == 0.0
+    assert np.allclose(s, stress0 + elastic_stiffness() @ compression, rtol=1e-12)
+    assert matsuoka_nakai_criterion(s, C, PHI_DEG) < 0.0
+
+    extension = -np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0]) * 1e-2 / np.sqrt(3.0)
+    s, _, statev = step(dll, stress0, extension, props)
+    assert statev[0] == 2.0
+    assert np.allclose(s, [-a, -a, -a, 0.0, 0.0, 0.0], atol=1e-9)
+
+
+@pytest.mark.parametrize("E, nu, c, phi_deg, psi_deg", [
+    (1e6, 0.49, 30.0, 80.0, 80.0),  # stiff, nearly incompressible, steep associated cone
+    (1e3, 0.0, 30.0, 80.0, 80.0),  # soft, no lateral contraction
+    (1e4, 0.3, 10.0, 5.0, 0.0),  # low friction angle
+    (1e3, 0.49, 0.0, 80.0, -30.0),  # strongly contractant
+    (1e5, 0.45, 0.0, 45.0, -30.0),  # strongly contractant
+])
+@pytest.mark.parametrize("magnitude", [1.0, 3.0])
+@pytest.mark.parametrize("direction", [
+    [2.0, -1.0, -1.0, 0.0, 0.0, 0.0],
+    [1.0, 1.0, -2.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 2.0, 0.0, 0.0],
+    [1.2, -0.9, -0.3, 0.9, -0.3, 0.6],
+], ids=["compression", "extension", "shear", "general"])
+def test_extreme_parameters_and_increments(dll, E, nu, c, phi_deg, psi_deg, magnitude, direction):
+    """
+    Deviatoric strain increments of 100 % and 300 % in a single step with extreme parameters are
+    integrated without a failure: with psi >= 0 the stress is returned onto the surface, with
+    strongly contractant flow (psi = -30 degrees) the mean stress drops to the apex.
+    """
+    props = [E, nu, c, phi_deg, psi_deg]
+    direction = np.asarray(direction) / np.linalg.norm(direction)
+    s, _, statev = step(dll, np.array(ISOTROPIC_STRESS), magnitude * direction, props)
+
+    assert np.all(np.isfinite(s))
+    if psi_deg < 0.0:
+        a = attraction(c, phi_deg)
+        assert statev[0] == 2.0
+        assert np.allclose(s, [-a, -a, -a, 0.0, 0.0, 0.0], atol=1e-9)
+    else:
+        assert statev[0] == 1.0
+        assert matsuoka_nakai_criterion(s, c, phi_deg) == pytest.approx(0.0, abs=1e-9)
+
+
+def potential_gradient(s, psi_deg):
+    """
+    Gradient of the plastic potential at the stress s (Voigt, derivatives with respect to the Voigt
+    components, matching engineering shear strains). The potential is a Matsuoka-Nakai cone with
+    the dilation angle psi; its gradient does not depend on the position of the apex, so it is the
+    gradient of the cone of angle psi with its apex shifted such that it passes through s. For
+    psi = 0 the cone is the von Mises cylinder and the gradient is the deviatoric stress.
+    """
+    s = np.asarray(s, dtype=float)
+    if psi_deg == 0.0:
+        p = mean_stress(s)
+        return np.r_[s[:3] - p, 2.0 * s[3:]]
+
+    tan_psi = np.tan(np.radians(psi_deg))
+
+    def g(stress, shift):
+        return matsuoka_nakai_criterion(stress, shift * tan_psi, psi_deg)
+
+    # the shift a of the apex lies between -sigma_3 (I3 = 0) and a value far along the isotropic axis
+    lo, hi = -principal_stresses(s)[-1] + 1e-12, 1e8
     for _ in range(200):
-        stress0 = np.r_[np.full(3, rng.uniform(10.0, 300.0)), 0.0, 0.0, 0.0] + rng.normal(size=6) * 20.0
-        dstrain = rng.normal(size=6) * 10.0 ** rng.uniform(-4.0, -1.0)
-        s, _, statev = step(dll, stress0, dstrain, props)
-        assert np.all(np.isfinite(s))
-        if statev[0] == 1.0:
-            n_plastic += 1
-            assert matsuoka_nakai_criterion(s, C, PHI_DEG) == pytest.approx(0.0, abs=1e-9)
-        elif statev[0] == 2.0:
-            assert np.allclose(s, [-a, -a, -a, 0.0, 0.0, 0.0], atol=1e-9)
-        else:
-            assert np.allclose(s, stress0 + elastic_stiffness() @ dstrain, rtol=1e-12, atol=1e-9)
-            assert matsuoka_nakai_criterion(s, C, PHI_DEG) <= 1e-9
-    assert n_plastic >= 50
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if g(s, mid) > 0.0 else (lo, mid)
+    shift = 0.5 * (lo + hi)
+
+    h = 1e-6 * (np.abs(s).max() + shift)
+    grad = np.zeros(6)
+    for j in range(6):
+        e = np.zeros(6)
+        e[j] = h
+        grad[j] = (g(s + e, shift) - g(s - e, shift)) / (2.0 * h)
+    return grad
+
+
+@pytest.mark.parametrize("psi_deg", [0.0, 10.0, 30.0])
+@pytest.mark.parametrize("c", [0.0, 5.0])
+def test_plastic_strain_follows_the_plastic_potential(dll, psi_deg, c):
+    """
+    The plastic strain increment d eps_p = d eps - Ce^-1 d sigma of a large plastic increment in a
+    general direction (all six components) is parallel to the gradient of the plastic potential at
+    the returned stress (implicit return mapping).
+    """
+    props = props_of(c=c, psi=psi_deg)
+    stress0 = np.array([120.0, 90.0, 100.0, 10.0, -5.0, 8.0])
+    dstrain = np.array([1.2e-2, -6e-3, 3e-3, 9e-3, -3e-3, 6e-3])
+    s, _, statev = step(dll, stress0, dstrain, props)
+    assert statev[0] == 1.0
+
+    d_eps_p = dstrain - np.linalg.solve(elastic_stiffness(), s - stress0)
+    grad = potential_gradient(s, psi_deg)
+    cos_angle = d_eps_p @ grad / (np.linalg.norm(d_eps_p) * np.linalg.norm(grad))
+    assert cos_angle == pytest.approx(1.0, abs=1e-8)
 
 
 def test_energy_terms(dll):

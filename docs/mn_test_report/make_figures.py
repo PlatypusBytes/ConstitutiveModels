@@ -6,12 +6,10 @@ and compares the results with closed-form solutions of the Matsuoka-Nakai criter
 (Matsuoka & Nakai, 1974) and of the plastic flow at failure.
 
     python docs/mn_test_report/make_figures.py
-    python docs/mn_test_report/make_figures.py --compare path/to/other/matsuoka_nakai.dll
 
 Stresses and strains are compression positive, as in the tests; the UMAT interface is tension
 positive and `step` converts. The figures are written to docs/mn_test_report/figures and the values
-quoted in the report are printed. With --compare, the review metrics of the report (Table 2) are
-printed for the given library and for the current one, without making the figures.
+quoted in the report, including the verification summary (Table 1), are printed.
 """
 
 import argparse
@@ -678,11 +676,10 @@ def fig_numerics():
 
 
 # --------------------------------------------------------------------------- #
-# Review metrics (Table 2 of the report)                                        #
+# Verification summary (Table 1 of the report)                                  #
 # --------------------------------------------------------------------------- #
-def review_metrics(umat):
-    """Metrics of the review for a library, using only paths without stress control (which needs a
-    usable tangent)."""
+def verification_summary(umat):
+    """Main verification checks of the report."""
     props = props_of()
     c, phi = BASE["c"], BASE["phi"]
     out = {}
@@ -733,23 +730,14 @@ def review_metrics(umat):
 
 def main():
     global UMAT
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--compare", help="print the review metrics for this library and the current one")
-    args = parser.parse_args()
+    argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter).parse_args()
     UMAT = Umat(DLL)
-
-    if args.compare:
-        other = Umat(os.path.abspath(args.compare))
-        with np.errstate(all="ignore"):
-            rows = [review_metrics(other), review_metrics(UMAT)]
-        print(f"{'metric':58s} | {os.path.basename(args.compare)} | current")
-        for key in rows[0]:
-            fmt = lambda v: f"{v:.1e}" if isinstance(v, float) else str(v)
-            print(f"{key:58s} | {fmt(rows[0][key])} | {fmt(rows[1][key])}")
-        return
 
     os.makedirs(FIG_DIR, exist_ok=True)
     print(f"UMAT: {DLL}")
+    summary("\n[verification summary]")
+    for key, value in verification_summary(UMAT).items():
+        summary(f"  {key:58s} {value:.1e}" if isinstance(value, float) else f"  {key:58s} {value}")
     fig_yield_surface()
     fig_triaxial()
     fig_plane_strain()

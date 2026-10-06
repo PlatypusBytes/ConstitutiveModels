@@ -13,6 +13,16 @@
 void calculate_elastic_stiffness_matrix_3d(double E, double nu,
                                            double elastic_matrix[VOIGTSIZE_3D * VOIGTSIZE_3D]);
 
+/**
+ * @brief Function to calculate the elastic compliance matrix for 3D isotropic materials, i.e. the
+ * inverse of the Hooke's law stiffness matrix, with engineering shear strains.
+ *
+ * @param[in]  E Young's modulus of the material.
+ * @param[in]  nu Poisson's ratio of the material.
+ * @param[out] compliance_matrix Pointer to the output compliance matrix (6x6) in row-major order.
+ */
+void calculate_elastic_compliance_matrix_3d(double E, double nu,
+                                            double compliance_matrix[VOIGTSIZE_3D * VOIGTSIZE_3D]);
 
 /**
  * @brief Function to calculate the elastic stiffness matrix for 2D interface materials using

@@ -97,3 +97,15 @@ void vector_scalar_multiply(const double* vector, const double scalar, const int
  */
 void vector_outer_product(const double* vector_1, const double* vector_2, const int length_vector,
                           double* result);
+
+/**
+ * @brief Inverts a square matrix by Gauss-Jordan elimination with partial pivoting.
+ *
+ * @param[in]  matrix Pointer to the input matrix (size×size) in row-major order; it is not
+ * modified.
+ * @param[in]  size The number of rows (and columns) of the matrix.
+ * @param[out] inverse Pointer to the output matrix (size×size) in row-major order where the inverse
+ * is stored; it must not overlap matrix.
+ * @return 1 on success, 0 if the matrix is singular or the work memory cannot be allocated.
+ */
+int invert_matrix(const double* matrix, const int size, double* inverse);

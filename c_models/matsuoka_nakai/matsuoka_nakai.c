@@ -117,82 +117,6 @@ typedef struct
 int check_properties(const int NPROPS, const double* PROPS);
 
 /**
- * @brief Elastic compliance matrix (inverse of the Hooke stiffness) with engineering shear
- * strains.
- */
-static void calculate_elastic_compliance_matrix_3d(const double E, const double nu,
-                                                   double compliance[VOIGTSIZE_3D_SQ])
-{
-    const double G = E / (2.0 * (1.0 + nu));
-    for (int i = 0; i < VOIGTSIZE_3D_SQ; ++i) compliance[i] = 0.0;
-    for (int i = 0; i < 3; ++i)
-    {
-        for (int j = 0; j < 3; ++j) compliance[i * VOIGTSIZE_3D + j] = (i == j) ? 1.0 / E : -nu / E;
-        compliance[(i + 3) * VOIGTSIZE_3D + (i + 3)] = 1.0 / G;
-    }
-}
-
-/**
- * @brief Inverts a 6x6 matrix by Gauss-Jordan elimination with partial pivoting.
- *
- * @return 1 on success, 0 if the matrix is singular.
- */
-static int invert_matrix_6x6(const double matrix[VOIGTSIZE_3D_SQ],
-                             double inverse[VOIGTSIZE_3D_SQ])
-{
-    const int n = VOIGTSIZE_3D;
-    double a[VOIGTSIZE_3D_SQ];
-    double max_entry = 0.0;
-    for (int i = 0; i < n * n; ++i)
-    {
-        a[i] = matrix[i];
-        inverse[i] = (i % (n + 1) == 0) ? 1.0 : 0.0;
-        if (fabs(a[i]) > max_entry) max_entry = fabs(a[i]);
-    }
-    if (max_entry == 0.0) return 0;
-
-    for (int col = 0; col < n; ++col)
-    {
-        int piv = col;
-        for (int r = col + 1; r < n; ++r)
-            if (fabs(a[r * n + col]) > fabs(a[piv * n + col])) piv = r;
-        if (fabs(a[piv * n + col]) < 1.0e-14 * max_entry) return 0;
-
-        if (piv != col)
-        {
-            for (int k = 0; k < n; ++k)
-            {
-                double tmp = a[col * n + k];
-                a[col * n + k] = a[piv * n + k];
-                a[piv * n + k] = tmp;
-                tmp = inverse[col * n + k];
-                inverse[col * n + k] = inverse[piv * n + k];
-                inverse[piv * n + k] = tmp;
-            }
-        }
-
-        const double pivot = a[col * n + col];
-        for (int k = 0; k < n; ++k)
-        {
-            a[col * n + k] /= pivot;
-            inverse[col * n + k] /= pivot;
-        }
-        for (int r = 0; r < n; ++r)
-        {
-            if (r == col) continue;
-            const double factor = a[r * n + col];
-            if (factor == 0.0) continue;
-            for (int k = 0; k < n; ++k)
-            {
-                a[r * n + k] -= factor * a[col * n + k];
-                inverse[r * n + k] -= factor * inverse[col * n + k];
-            }
-        }
-    }
-    return 1;
-}
-
-/**
  * @brief Quantities of the return mapping evaluated at a stress state.
  */
 typedef struct
@@ -241,7 +165,7 @@ static int calculate_algorithmic_stiffness(const MNModel* model, const MNEvaluat
 {
     double A[VOIGTSIZE_3D_SQ];
     for (int i = 0; i < VOIGTSIZE_3D_SQ; ++i) A[i] = model->Ce_inv[i] + delta_gamma * ev->hess_g[i];
-    return invert_matrix_6x6(A, Xi);
+    return invert_matrix(A, VOIGTSIZE_3D, Xi);
 }
 
 /**
