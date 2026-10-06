@@ -1,0 +1,575 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage[round]{natbib}
+\usepackage[hidelinks]{hyperref}
+
+\graphicspath{{figures/}}
+\setlength{\emergencystretch}{1.5em}
+
+\usepackage{url}
+\DeclareUrlCommand\file{\urlstyle{tt}}  % file names, breakable at / and _
+\newcommand{\eref}{^{\mathit{ref}}}
+
+\title{Hardening Soil UMAT --- Test Report}
+\author{ConstitutiveModels}
+\date{October 5, 2026}
+
+\begin{document}
+\maketitle
+
+% ---------------------------------------------------------------------------
+\section{Scope}
+
+This report summarises the verification of the Hardening Soil (HS) UMAT
+\file{c_models/hardening_soil/hardening_soil.c}, following \citet{Schanz_1999}, \emph{The
+hardening soil model: Formulation and verification}. Equation, section, table and figure numbers
+without further reference refer to \citet{Schanz_1999}. The unit tests are in \file{tests/test_hardening_soil.py}; the figures are produced by
+\file{docs/hs_test_report/make_figures.py}, which drives the UMAT along element test paths and
+controls lateral stresses by Newton iteration on the strain increment where needed. The library
+under test is \file{build_C/lib/hardening_soil.dll}, built from the current sources with
+\file{Makefile.windows}.
+
+The model combines
+\begin{itemize}
+  \item stress-dependent stiffness $E_{50}, E_{ur} \propto \left((\sigma_3 + a)/(p\eref + a)\right)^m$
+        with $a = c\cot\varphi$ (Eqs.~3--5);
+  \item shear hardening on the hyperbolic yield surface $f_{13}$ (Eqs.~7--9), after
+        \citet{Kondner_1963} and \citet{Duncan_1970}, with Mohr--Coulomb failure at $q_f$ (Eq.~2);
+  \item non-associated flow with the mobilised dilatancy angle of Rowe's stress--dilatancy theory
+        \citep{Rowe_1962, Schanz_1996} (Eqs.~11--15), bounded so that the shear
+        surface does not contract, and a dilatancy cut-off (Eqs.~38--39);
+  \item an elliptic cap with associated flow and hardening of the pre-consolidation stress $p_c$
+        (Eqs.~27--36);
+  \item a return mapping in principal stress space with Koiter's rule at the triaxial corners
+        \citep{Koiter_1960} (Eq.~26), and automatic sub-stepping.
+\end{itemize}
+
+Stresses and strains are compression positive, as in \citet{Schanz_1999}; the UMAT interface is tension
+positive (Abaqus convention) and the drivers convert. $p = \frac{1}{3}\operatorname{tr}\boldsymbol{\sigma}'$,
+$q = \sqrt{\frac{3}{2}\,\mathbf{s}:\mathbf{s}}$ (equal to $\sigma_1 - \sigma_3$ under triaxial
+conditions), and $\gamma^p = \varepsilon_1^p - \varepsilon_2^p - \varepsilon_3^p$ (Eq.~9). Two
+parameter sets are used (Table~\ref{tab:parameters}): the set of the unit tests, and loose Hostun
+sand from Table~1 of \citet{Schanz_1999}.
+
+\begin{table}[h]
+  \centering
+  \caption{Material parameters. $R_f = 0.9$ for Hostun sand is the default of Sec.~2 of \citet{Schanz_1999};
+           its $M$ and $K_s/K_c$ are calibrated in Sec.~\ref{sec:hostun-oedometer}. Variations (cap
+           off, $m = 0$, dilatancy cut-off, $\psi = 14^\circ$ for Hostun sand) are stated where they
+           are used.}
+  \label{tab:parameters}
+  \small
+  \begin{tabular}{lccccccccccc}
+    \toprule
+    Set & $E_{50}\eref$ & $E_{ur}\eref$ & $m$ & $c$ & $\varphi$ & $\psi$ & $p\eref$ & $R_f$ & $\nu_{ur}$ & $M$ & $K_s/K_c$ \\
+        & [MPa] & [MPa] & [--] & [kPa] & [$^\circ$] & [$^\circ$] & [kPa] & [--] & [--] & [--] & [--] \\
+    \midrule
+    Unit tests   & 30 & 90 & 0.55 & 0 & 42 & 16 & 100 & 0.9 & 0.25 & 1.0   & 1.84  \\
+    Hostun sand  & 20 & 60 & 0.65 & 0 & 34 & 0  & 100 & 0.9 & 0.20 & 1.233 & 2.109 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Test results}
+
+All 18 unit tests pass (pytest, October 5, 2026).
+
+\begin{table}[h]
+  \centering
+  \small
+  \begin{tabular}{llc}
+    \toprule
+    Test & Checks & Result \\
+    \midrule
+    \texttt{elastic\_isotropic\_response}                & $E_{ur}$-based response inside the cap      & pass \\
+    \texttt{shear\_yields\_immediately}                  & plastic shear from $q = 0$, $\gamma^p > 0$ & pass \\
+    \texttt{hardening\_monotonic\_and\_yield\_...}       & $q$, $\gamma^p$ increase; $f_{13} \le 0$; $q \le q_f$ & pass \\
+    \texttt{triaxial\_reaches\_and\_respects\_failure}   & drained triaxial, $q \le q_f$              & pass \\
+    \texttt{principal\_frame\_invariance} ($\times 2$)   & rotated loading, rotated stress            & pass \\
+    \texttt{drained\_triaxial\_follows\_hyperbola}       & Eq.~1; $E_{50}$ secant at $q_f/2$          & pass \\
+    \texttt{plastic\_strains\_follow\_rowe\_dilatancy}   & Eqs.~9 and 11--15, no contraction          & pass \\
+    \texttt{undrained\_shear\_surface\_...} ($\times 2$) & undrained, cap off: $p' = \sigma_c$ below $\varphi_{cv}$ & pass \\
+    \texttt{cap\_isotropic\_normal\_compression}         & Eqs.~31--33; elastic unloading with $K_s$  & pass \\
+    \texttt{mohr\_coulomb\_failure\_general\_...} ($\times 2$) & plane strain, triaxial extension     & pass \\
+    \texttt{umat\_interface\_is\_tension\_positive}      & sign convention, regular tangent           & pass \\
+    \texttt{tangent\_matches\_numerical\_...} ($\times 2$) & DDSDDE vs.\ finite differences           & pass \\
+    \texttt{zero\_confinement\_and\_tension}             & apex return, positive definite tangent     & pass \\
+    \texttt{stress\_update\_is\_continuous\_...}         & no jumps from the sub-stepping             & pass \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The tangent tests compare DDSDDE, the elasto-plastic (Koiter) tangent of the active yield
+surfaces, with a finite-difference derivative of the stress update under continued plastic
+loading, in a rotated frame:
+\begin{itemize}
+  \item \emph{cap off, plane strain} (no triaxial corner): relative difference
+        $\|\mathbf{D} - \mathbf{D}_{FD}\|/\|\mathbf{D}_{FD}\| = 6.5\times10^{-4}$ (tolerance
+        $10^{-2}$);
+  \item \emph{cap on, triaxial compression corner}: $5.4\times10^{-3}$ (tolerance
+        $3\times10^{-2}$). At the corner the exact tangent has no stiffness in the corner mode; the
+        UMAT keeps 1\,\% of it (\file{HS_CORNER_STIFFNESS_FRACTION}) so that the global stiffness
+        matrix stays regular, which accounts for most of the difference.
+\end{itemize}
+The remaining difference is the explicit (Euler) integration within the sub-steps: the stiffness
+and dilatancy are frozen during a sub-step, while the tangent is evaluated at its end.
+
+% ---------------------------------------------------------------------------
+\section{Shear hardening: drained triaxial compression}
+
+Drained triaxial compression at constant $\sigma_3$ uses the unit-test parameters, with the cap off
+and no plastic volume change on the shear surface (dilatancy cut-off active from the start,
+$e_0 = 0.8 > e_{cv} = 0.5$). Then $\gamma^p = 2\varepsilon_1^p$ and the hyperbola holds exactly. The
+UMAT uses $E_i = 2E_{50}/(2 - R_f)$, which makes $E_{50}$ the secant stiffness at $q_f/2$ as defined
+in Sec.~2.1; for $R_f \to 1$ this becomes the $E_i = 2E_{50}$ of Eq.~1.
+
+The computed curves coincide with the hyperbola and stay below $q_f$ (Fig.~\ref{fig:hyperbola}a). The
+largest relative deviation in $\varepsilon_1$ is $3.1\times10^{-4}$, at $\sigma_3 = 100$~kPa. The
+secant stiffness at $q_f/2$ follows Eq.~3 within $1.1\times10^{-5}$ for $\sigma_3 = 25$--$800$~kPa
+(Fig.~\ref{fig:hyperbola}b).
+
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{triaxial_hyperbola.pdf}
+    \caption{$\varepsilon_1$--$q$ at three confining pressures}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{triaxial_e50.pdf}
+    \caption{secant stiffness $E_{50}$ vs.\ $\sigma_3$}
+  \end{subfigure}
+  \caption{Drained triaxial compression without cap and without plastic volume change (unit-test
+           parameters).}
+  \label{fig:hyperbola}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Stress dilatancy and dilatancy cut-off}
+
+This case is drained triaxial compression at $\sigma_3 = 100$~kPa with $m = 0$ and the cap off. The
+elastic stiffness is then constant, so the plastic strains follow directly from the total strains.
+The plastic shear strain $\varepsilon_1^p - \varepsilon_2^p - \varepsilon_3^p$ equals the hardening
+parameter $\gamma^p$ (Eq.~9) to $5\times10^{-14}$. The ratio
+$-\Delta\varepsilon_v^p/\Delta\gamma^p$ gives the mobilised dilatancy angle.
+
+Rowe's relation, Eq.~11, makes the soil contract below $\varphi_{cv}$, down to $\psi_m =
+-\varphi_{cv}$ at $\varphi_m = 0$ (dotted line in Fig.~\ref{fig:dilatancy}a). The UMAT bounds it so
+that the shear surface does not contract:
+\begin{equation*}
+  \sin\psi_m =
+  \begin{cases}
+    0 & \sin\varphi_m < \tfrac{3}{4}\sin\varphi \\[0.5ex]
+    \max\left(\dfrac{\sin\varphi_m - \sin\varphi_{cv}}{1 - \sin\varphi_m\sin\varphi_{cv}},\, 0\right)
+      & \sin\varphi_m \ge \tfrac{3}{4}\sin\varphi,\ \psi > 0 \\[1.5ex]
+    \sin\psi & \sin\varphi_m \ge \tfrac{3}{4}\sin\varphi,\ \psi \le 0
+  \end{cases}
+\end{equation*}
+Plastic compaction then comes from the cap alone. The computed curves of \citet{Schanz_1999} for loose Hostun
+sand show no contraction of the shear surface either
+(Secs.~\ref{sec:hostun-drained}--\ref{sec:undrained}).
+
+Here $\varphi_{cv} = 28.85^\circ$ (Eq.~13), below the bound at $\varphi_m = 30.12^\circ$. The
+computed $\sin\psi_m$ is zero (to $7\times10^{-15}$) below the bound. Above it the soil dilates
+following Eq.~11, and reaches $\psi_m = \psi = 16.000^\circ$ at failure. The UMAT evaluates $\psi_m$
+at the start of each sub-step (Euler explicit, Sec.~3), so the ratio of a load step lies between the
+values of the rule at its start and its end; it does so to $3\times10^{-13}$. The figure plots it
+against the mean stress ratio of each load step.
+
+With the dilatancy cut-off ($e_0 = 0.60$, $e_{cv} = 0.65$), dilatancy stops when the void ratio
+reaches $e_{cv}$. By Eq.~39 this happens at $\varepsilon_v = -\ln(1.65/1.60) = -3.08\,\%$; the
+computed final value is also $-3.08\,\%$ (Fig.~\ref{fig:dilatancy}b; compare Fig.~4 of \citealp{Schanz_1999}).
+
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{dilatancy_rowe.pdf}
+    \caption{mobilised dilatancy vs.\ friction angle}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{dilatancy_ev.pdf}
+    \caption{$\varepsilon_1$--$\varepsilon_v$ with and without cut-off}
+  \end{subfigure}
+  \caption{Drained triaxial compression, $\sigma_3 = 100$~kPa, $m = 0$, cap off.}
+  \label{fig:dilatancy}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Cap: isotropic compression}
+
+The cap is tested in normally consolidated isotropic compression with the unit-test parameters:
+loading from $p = 100$ to $400$~kPa, unloading to $150$~kPa and reloading to $800$~kPa. Only the
+cap is active on this path, and $\gamma^p$ stays zero. On primary loading
+$dp/d\varepsilon_v = K_c\,((p + a)/(p\eref + a))^m$ with $K_c = K_s/(K_s/K_c)$ (Eqs.~31--32). On
+unloading and reloading the modulus is $K_s$, with the same stress dependency.
+
+Integrating these moduli gives the closed-form curve of Fig.~\ref{fig:cap}a. At the two reversal
+points and at the end, the computed $\varepsilon_v$ deviates from it by 0.14\,\%, 0.44\,\% and
+0.26\,\%; this is explicit integration error accumulated along the path. The tangent moduli deviate
+by at most $1.5\times10^{-3}$ on primary loading and $2.8\times10^{-3}$ on unloading--reloading
+(Fig.~\ref{fig:cap}b). Reloading becomes plastic again when $p$ reaches the pre-consolidation stress
+$p_c = 402$~kPa reached in the first branch.
+
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{cap_isotropic.pdf}
+    \caption{$\varepsilon_v$--$p$}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{cap_bulk_modulus.pdf}
+    \caption{tangent bulk modulus}
+  \end{subfigure}
+  \caption{Isotropic compression with an unloading--reloading loop (unit-test parameters).}
+  \label{fig:cap}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{General stress states}
+
+Three drained paths start from an isotropic state of 100~kPa:
+\begin{itemize}
+  \item triaxial compression, $\sigma_2 = \sigma_3 = 100$~kPa;
+  \item plane strain, $\varepsilon_{yy} = 0$ and $\sigma_{zz} = 100$~kPa, with the cap off as in the
+        unit test;
+  \item triaxial extension, $\sigma_{xx} = \sigma_{yy} = 100$~kPa with $\sigma_{zz}$ reduced.
+\end{itemize}
+All three reach the Mohr--Coulomb surface ($\sin\varphi_m = \sin\varphi$ to $10^{-8}$, failure flag
+set). The final values of $b = (\sigma_2 - \sigma_3)/(\sigma_1 - \sigma_3)$ are 0, 0.25 and 1
+(Fig.~\ref{fig:stress-states}). With $c = 0$, the Mohr--Coulomb surface normalised by $p$ is a fixed
+hexagon in the deviatoric plane. The compression and extension paths end in its corners, and the
+plane strain path ends on a face.
+
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{stress_states_mobilisation.pdf}
+    \caption{mobilised friction vs.\ shear strain}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{stress_states_pi_plane.pdf}
+    \caption{deviatoric plane, stresses normalised by $p$}
+  \end{subfigure}
+  \caption{Drained compression, plane strain and extension from 100~kPa (unit-test parameters).}
+  \label{fig:stress-states}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Hostun sand: calibration and oedometer test}
+\label{sec:hostun-oedometer}
+
+\citet{Schanz_1999} calibrate the model for loose Hostun sand (Sec.~6 and Table~1). Its cap input parameters,
+$K_0^{NC}$ and $E_{oed}\eref$, are not inputs of this UMAT. Instead, $M$ and $K_s/K_c$ are found by
+Newton iteration so that normally consolidated oedometer loading gives
+\begin{itemize}
+  \item a tangent ratio $K_0 = \Delta\sigma_3/\Delta\sigma_1 = 1 - \sin\varphi = 0.4408$
+        (Sec.~5.2), and
+  \item $E_{oed} = 16$~MPa at $\sigma_1 = p\eref$ (Eq.~37).
+\end{itemize}
+This gives $M = 1.233$ and $K_s/K_c = 2.109$. At the $K_0^{NC}$ stress ratio,
+$\sin\varphi_m = 0.39 < \frac{3}{4}\sin\varphi$, so the shear surface has no plastic volume change
+and the cap provides all of the plastic compaction.
+
+Fig.~\ref{fig:oedometer} shows an oedometer test from $\sigma_1 = 2$~kPa (in a $K_0^{NC}$ state) to
+200~kPa, unloading to 10~kPa and reloading to 300~kPa (compare Fig.~5 of \citealp{Schanz_1999}). Primary
+loading follows Eq.~37 (Table~\ref{tab:oedometer}), with $K_0 = 0.441$ throughout, and $\varepsilon_1$
+at 200~kPa is 1.821\,\% against 1.822\,\% from Eq.~37.
+
+Unloading starts elastic, with $\Delta\sigma_3/\Delta\sigma_1 = \nu_{ur}/(1 - \nu_{ur}) = 0.25$. At
+$\sigma_1 = 16$~kPa ($\sigma_3/\sigma_1 = 2.6$) the stress state reaches the shear hardening surface
+in extension, and $\gamma^p$ increases again, from 0.0081 to 0.0106; this is the kink in
+Fig.~\ref{fig:oedometer}b. The failure surface is not reached. Because the lateral strain is zero,
+the plastic lateral expansion is balanced by elastic lateral compression, and $\sigma_3$ falls
+faster than on the elastic line (28.5~kPa at $\sigma_1 = 10$~kPa instead of about 40~kPa).
+
+Reloading is elastic with the same slope of 0.25, so it runs about 12~kPa below the unloading
+line. The loop does not close, and the stress state stays more deviatoric than on primary loading
+($\sigma_3/\sigma_1 = 0.404$ at $\sigma_1 = 169$~kPa). At this point it reaches the shear hardening
+surface in compression, which was enlarged by the extension yielding because the hardening is
+isotropic in $\gamma^p$. The cap is not reached first; $p_c$ only starts to increase again near
+the previous maximum of $\sigma_1 = 200$~kPa. Plastic shear flow raises the tangent ratio
+$\Delta\sigma_3/\Delta\sigma_1$ from 0.25 to about 0.42, which recovers part of the lost horizontal
+stress. Above 200~kPa both surfaces are active and the path turns back towards the $K_0^{NC}$ line,
+but only slowly, because the stiffness scales with stress. The tangent ratio stays just above the
+secant ratio, so $\sigma_3/\sigma_1$ is 0.413 at 300~kPa, 0.425 at 1000~kPa and 0.432 at 3000~kPa.
+This is why the reloading path in Fig.~\ref{fig:oedometer}b ends below the $K_0^{NC}$ line: the
+stress state keeps a memory of the unloading--reloading loop.
+
+\begin{table}[h]
+  \centering
+  \caption{Tangent oedometer modulus on primary loading, Hostun sand.}
+  \label{tab:oedometer}
+  \small
+  \begin{tabular}{rccc}
+    \toprule
+    $\sigma_1$ [kPa] & $E_{oed}$ UMAT [MPa] & $E_{oed}$ Eq.~37 [MPa] & $K_0$ (tangent) \\
+    \midrule
+    50  & 10.20 & 10.19 & 0.441 \\
+    100 & 16.01 & 16.00 & 0.441 \\
+    200 & 25.12 & 25.11 & 0.441 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{hostun_oedometer.pdf}
+    \caption{$\varepsilon_1$--$\sigma_1$}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{hostun_oedometer_path.pdf}
+    \caption{stress path $\sigma_1$--$\sigma_3$}
+  \end{subfigure}
+  \caption{Oedometer test on loose Hostun sand with an unloading--reloading loop.}
+  \label{fig:oedometer}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Hostun sand: drained triaxial tests}
+\label{sec:hostun-drained}
+
+These are drained triaxial compression tests at $\sigma_3 = 300$~kPa (Fig.~6 of \citealp{Schanz_1999}) and
+600~kPa to $\varepsilon_1 = 0.18$, followed by unloading to $q = 0$. At 300~kPa the stress ratio
+reaches $(1 + \sin\varphi)/(1 - \sin\varphi) = 3.537$ at $\varepsilon_1 = 0.107$ and then stays
+constant (Fig.~\ref{fig:drained}a); Fig.~6 of \citet{Schanz_1999} shows a maximum of about 3.5. With
+$\psi = 0$ the shear surface has no plastic volume change. The soil compacts elastically and on the
+cap until failure ($\varepsilon_v = 0.97\,\%$ at $\varepsilon_1 = 0.109$), and deforms at constant
+volume afterwards (Fig.~\ref{fig:drained}b). Unloading is elastic.
+
+The 600~kPa tests are the 300~kPa tests with all strains multiplied by $2^{1-m} = 1.275$, as in the
+undrained tests (Sec.~\ref{sec:undrained}). With $\psi = 0$, failure is reached at
+$\varepsilon_1 = 0.136$, with $\varepsilon_v = 1.24\,\%$.
+
+The computed $\varepsilon_v$ in Fig.~6 of \citet{Schanz_1999} reaches about 0.9\,\% and then decreases after
+failure. That decrease is dilatancy at failure, which $\psi = 0$ excludes (Eq.~13 then gives
+$\varphi_{cv} = \varphi$, so $\psi_m = 0$ at failure).
+
+With $\psi = 14^\circ$ (dashed lines), Eq.~13 gives $\varphi_{cv} = 21.5^\circ$, and the soil dilates
+as soon as $\sin\varphi_m \ge \frac{3}{4}\sin\varphi$. At 300~kPa, $\varepsilon_v$ reaches its
+maximum of 0.58\,\% at $\varepsilon_1 = 0.018$ and then decreases steadily, to $-8.3\,\%$ at the end
+of loading. The stress ratio reaches the failure value earlier, at $\varepsilon_1 = 0.089$. At
+600~kPa the maximum is 0.74\,\% at $\varepsilon_1 = 0.023$, failure is reached at
+$\varepsilon_1 = 0.114$, and $\varepsilon_v = -7.5\,\%$ at the end of loading.
+
+The secant stiffness at $q_f/2$ is 33.4~MPa, 18\,\% below
+$E_{50} = E_{50}\eref\,(300/100)^{0.65} = 40.8$~MPa from Eq.~3 (Table~\ref{tab:e50}). This is caused
+by the cap. The mean stress $p$ increases along the triaxial path from a normally consolidated
+state, so the cap yields as well. Without the cap, Eq.~3 is recovered exactly. $\psi$ does not
+affect the secant stiffness, since $\psi_m = 0$ below $\sin\varphi_m = \frac{3}{4}\sin\varphi$.
+
+\begin{table}[h]
+  \centering
+  \caption{Secant stiffness at $q_f/2$ in drained triaxial compression of Hostun sand,
+           $\sigma_3 = 300$~kPa (Eq.~3: 40.85~MPa).}
+  \label{tab:e50}
+  \small
+  \begin{tabular}{lcc}
+    \toprule
+    Variant & $E_{50}$ secant [MPa] & $\varepsilon_v$ at $q_f/2$ [\%] \\
+    \midrule
+    no cap           & 40.85 & 0.19 \\
+    cap (full model) & 33.45 & 0.49 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{hostun_drained_ratio.pdf}
+    \caption{$\varepsilon_1$--$\sigma_1/\sigma_3$}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{hostun_drained_ev.pdf}
+    \caption{$\varepsilon_1$--$\varepsilon_v$}
+  \end{subfigure}
+  \caption{Drained triaxial tests on loose Hostun sand, $\sigma_3 = 300$ and 600~kPa: $\psi = 0$
+           (Table~1 of \citealp{Schanz_1999}, solid) and $\psi = 14^\circ$ (dashed).}
+  \label{fig:drained}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Hostun sand: undrained triaxial tests}
+\label{sec:undrained}
+
+Undrained (isochoric) triaxial compression runs from isotropic, normally consolidated states
+$\sigma_c = 300$ and 600~kPa to $\varepsilon_1 = 0.20$ (compare Figs.~7--8 of \citealp{Schanz_1999}, whose
+experiments are by \citet{Djedid_1986}). The total lateral stress stays at $\sigma_c$, so the excess
+pore pressure is $\Delta u = \sigma_c - \sigma_3'$. Both $\psi = 0$ (Table~1 of \citealp{Schanz_1999}) and
+$\psi = 14^\circ$ are computed (Table~\ref{tab:undrained}, Fig.~\ref{fig:undrained}).
+
+Under undrained conditions $dp' = -K\,d\varepsilon_v^p$, so $p'$ changes only through plastic volume
+change. With $\psi = 0$ the shear surface has none. $p'$ drops only through compaction on the cap,
+which yields from the start because the samples are normally consolidated; without the cap, $p'$
+stays at $\sigma_c$. The path rises steeply and bends to the left until it reaches the failure line
+$q = 1.37\,p'$, at $\varepsilon_1 = 7.6\,\%$ for $\sigma_c = 300$~kPa and 9.7\,\% for 600~kPa. At
+failure $\psi_m = 0$, so the state is stationary from there, at $\Delta u/\sigma_c = 0.555$ and
+$\varphi'_{mob} = 34.0^\circ$.
+
+With $\psi = 14^\circ$ the soil dilates from $\sin\varphi_m = \frac{3}{4}\sin\varphi$ on, well
+before failure. $\Delta u/\sigma_c$ peaks at 0.412, at $\varepsilon_1 = 1.2\,\%$ for
+$\sigma_c = 300$~kPa, and then decreases and becomes negative. $p'$ increases, and the path climbs
+just below the failure line ($\varphi'_{mob} = 33.4^\circ$ at $\varepsilon_1 = 0.20$). Without a
+dilatancy cut-off nothing limits this: at $\varepsilon_1 = 0.20$, $p' = 5.8$~MPa and
+$\Delta u/\sigma_c = -9.6$ for $\sigma_c = 300$~kPa. In a real test, cavitation of the pore water
+would limit the suction long before that. The stress ratio stays below that of the $\psi = 0$ test
+after $\varepsilon_1 \approx 2\,\%$, because $q_f$ increases with $p'$ and the shear surface lags
+behind it.
+
+With $c = 0$ and stiffness laws that are power laws of stress, the model has no stress scale of its
+own. The response normalised by $\sigma_c$ is therefore the same for every cell pressure, and only the
+strains scale, with $\sigma_c^{1-m}$: the 600~kPa test is the 300~kPa test with all strains multiplied
+by $2^{1-m} = 1.275$. The UMAT satisfies this to $6\times10^{-14}$ (checked for $\psi = 14^\circ$).
+
+\subsection{Computed curves of \texorpdfstring{\citet{Schanz_1999}}{Schanz et al. (1999)}}
+\label{sec:undrained-paper}
+
+The computed undrained curves in Figs.~7--8 of \citet{Schanz_1999} cannot result from the parameters of
+their Table~1:
+\begin{itemize}
+  \item \emph{Dilatancy with $\psi = 0$.} Beyond the failure line the computed paths of \citet{Schanz_1999}
+        climb along it while $\Delta u$ decreases. With $\psi = 0$, Eq.~13 gives
+        $\varphi_{cv} = \varphi$, so $\psi_m = 0$ at failure. There is no plastic volume change, $p'$
+        is stationary and $\Delta u$ cannot decrease. The decrease requires dilatancy at failure,
+        i.e.\ $\psi > 0$. The same holds for the computed drained test, whose $\varepsilon_v$
+        decreases after failure (Sec.~\ref{sec:hostun-drained}).
+  \item \emph{Dependence on the cell pressure.} By the scaling above, the 600~kPa test must reach a
+        given $\Delta u/\sigma_c$ at a larger strain than the 300~kPa test, and at equal stress ratio
+        $\sigma_1'/\sigma_3'$ both must have the same $\Delta u/\sigma_c$. In Fig.~8 of \citet{Schanz_1999} the
+        600~kPa $\Delta u$ curve falls faster than the 300~kPa curve, and at equal stress ratio the
+        two differ. This holds for any parameter set with $c = 0$, so no value of $\psi$ fits both
+        tests. \citet{Schanz_1999} do not give enough information to find the cause; one possibility is that
+        the line styles of the two $\Delta u$ curves are exchanged.
+\end{itemize}
+
+\begin{table}[h]
+  \centering
+  \caption{Undrained triaxial tests on loose Hostun sand (800 steps to $\varepsilon_1 = 0.20$).}
+  \label{tab:undrained}
+  \small
+  \begin{tabular}{llcc}
+    \toprule
+    $\sigma_c$ & Quantity & $\psi = 0$ & $\psi = 14^\circ$ \\
+    \midrule
+    300~kPa & maximum $\Delta u/\sigma_c$                        & 0.555      & 0.412        \\
+            & $\varepsilon_1$ at the maximum                     & 0.076      & 0.012        \\
+            & $(p', q)$ at $\varepsilon_1 = 0.20$ [kPa]          & (246, 339) & (5768, 7787) \\
+            & $\Delta u/\sigma_c$ at $\varepsilon_1 = 0.20$      & 0.555      & $-9.58$      \\
+            & $\varphi'_{mob}$ at $\varepsilon_1 = 0.20$         & $34.0^\circ$ & $33.4^\circ$ \\
+    \midrule
+    600~kPa & maximum $\Delta u/\sigma_c$                        & 0.555      & 0.412        \\
+            & $\varepsilon_1$ at the maximum                     & 0.097      & 0.016        \\
+            & $(p', q)$ at $\varepsilon_1 = 0.20$ [kPa]          & (493, 677) & (6991, 9396) \\
+            & $\Delta u/\sigma_c$ at $\varepsilon_1 = 0.20$      & 0.555      & $-5.43$      \\
+            & $\varphi'_{mob}$ at $\varepsilon_1 = 0.20$         & $34.0^\circ$ & $33.3^\circ$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{hostun_undrained_pq.pdf}
+    \caption{$p'$--$q$}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{hostun_undrained_ratio.pdf}
+    \caption{$\varepsilon_1$--$\sigma_1'/\sigma_3'$}
+  \end{subfigure}
+
+  \vspace{1ex}
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{hostun_undrained_du.pdf}
+    \caption{$\varepsilon_1$--$\Delta u/\sigma_c$}
+  \end{subfigure}
+  \caption{Undrained triaxial tests on loose Hostun sand, normally consolidated: $\psi = 0$
+           (Table~1 of \citealp{Schanz_1999}, solid) and $\psi = 14^\circ$ (dashed); (a) on logarithmic axes. The
+           solid lines of both cell pressures coincide in (c) once failure is reached. Compare
+           Figs.~7--8 of \citet{Schanz_1999}.}
+  \label{fig:undrained}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Numerical aspects}
+\label{sec:numerics}
+
+Within each load step the UMAT sub-steps so that the elastic stress increment per sub-step stays
+below 1\,\% of $\sigma_3 + a$. The step-size study repeats the Hostun drained triaxial test with 10,
+40 and 360 load steps and compares each with a 720-step reference (Table~\ref{tab:steps},
+Fig.~\ref{fig:steps}). Even the coarsest run, at $\Delta\varepsilon_1 = 1.8\,\%$ per step, stays
+within 1\,\% of $q_f$. For the undrained test ($\sigma_c = 300$~kPa), the end state ($p'$ and
+$\Delta u/\sigma_c$) with 200, 800 and 3200 steps is the same to six digits for $\psi = 0$, and
+within $4\times10^{-5}$ for $\psi = 14^\circ$.
+
+Invariance under rotation of the loading frame, continuity of the stress update in the strain
+increment, and loading at zero confinement and in tension are covered by the unit tests
+(Sec.~2).
+
+\begin{table}[h]
+  \centering
+  \caption{Step-size dependence, drained triaxial test on Hostun sand ($\sigma_3 = 300$~kPa,
+           $\varepsilon_1 = 0.18$), against 720 steps.}
+  \label{tab:steps}
+  \small
+  \begin{tabular}{rccc}
+    \toprule
+    Steps & $\Delta\varepsilon_1$ & $\max|\Delta q|/q_f$ & $\max|\Delta\varepsilon_v|$ \\
+    \midrule
+    10  & $1.8\times10^{-2}$ & $8.8\times10^{-3}$ & $1.4\times10^{-4}$ \\
+    40  & $4.5\times10^{-3}$ & $1.6\times10^{-3}$ & $1.3\times10^{-5}$ \\
+    360 & $5.0\times10^{-4}$ & $1.6\times10^{-5}$ & $1.3\times10^{-7}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.55\textwidth]{step_size.pdf}
+  \caption{Drained triaxial test on Hostun sand with 10, 40 and 360 load steps.}
+  \label{fig:steps}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Open points}
+\label{sec:open}
+
+\begin{enumerate}
+  \item \emph{Computed curves of \citet{Schanz_1999} for loose Hostun sand.} Their Table~1 gives
+        $\psi = 0$, but their computed drained and undrained curves dilate after failure, which
+        $\psi = 0$ excludes; and their 600~kPa undrained $\Delta u$ curve contradicts the
+        $\sigma_c$-scaling of the model (Sec.~\ref{sec:undrained-paper}). Results are therefore given
+        for both $\psi = 0$ and $\psi = 14^\circ$.
+  \item \emph{$E_{50}$ calibration.} With an active cap, the secant stiffness of a computed drained
+        triaxial test is lower than the input $E_{50}$, by 18\,\% for Hostun sand. If
+        $E_{50}\eref$ is taken directly from the secant stiffness of a triaxial test, the computed
+        response of such soils is therefore softer than the test; $E_{50}\eref$ should then be
+        fitted by simulating the test.
+\end{enumerate}
+
+\bibliographystyle{plainnat}
+\bibliography{../refs}
+
+\end{document}

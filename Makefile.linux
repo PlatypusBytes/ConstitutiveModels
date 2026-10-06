@@ -15,7 +15,10 @@ LINEAR_ELASTIC_TENS_2D_INTERFACE_DIR = $(C_MODELS_DIR)/linear_elastic_with_verti
 LINEAR_ELASTIC_TENS_3D_INTERFACE_DIR = $(C_MODELS_DIR)/linear_elastic_with_vertical_tens_cutoff_3d_interface
 MATSUOKA_NAKAI_DIR = $(C_MODELS_DIR)/matsuoka_nakai
 VISCOELASTIC_KELVIN_VOIGT_DIR = $(C_MODELS_DIR)/viscoelastic_kelvin_voigt
+HARDENING_SOIL_DIR = $(C_MODELS_DIR)/hardening_soil
 YIELD_SURFACES_DIR = $(C_MODELS_DIR)/yield_surfaces
+HARDENING_RULES_DIR = $(C_MODELS_DIR)/hardening_rules
+FLOW_RULES_DIR = $(C_MODELS_DIR)/flow_rules
 
 # Include directories
 INCLUDES = -I$(C_MODELS_DIR) -I$(ELASTIC_LAWS_DIR) -I$(YIELD_SURFACES_DIR)
@@ -25,7 +28,18 @@ COMMON_OBJS = \
 	$(BUILD_DIR)/globals.o \
 	$(BUILD_DIR)/utils.o \
 	$(BUILD_DIR)/stress_utils.o \
+	$(BUILD_DIR)/strain_utils.o \
 	$(BUILD_DIR)/hookes_law.o
+
+# Building blocks of the Hardening Soil model
+HARDENING_SOIL_OBJS = \
+	$(BUILD_DIR)/power_law_stiffness.o \
+	$(BUILD_DIR)/mohr_coulomb_surface.o \
+	$(BUILD_DIR)/hyperbolic_shear_surface.o \
+	$(BUILD_DIR)/elliptic_cap_surface.o \
+	$(BUILD_DIR)/hyperbolic_shear_hardening.o \
+	$(BUILD_DIR)/cap_hardening.o \
+	$(BUILD_DIR)/rowe_dilatancy.o
 
 # Target shared libraries
 LIBS = \
@@ -33,7 +47,8 @@ LIBS = \
     $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff_2d_interface.so \
     $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff_3d_interface.so \
     $(LIB_DIR)/matsuoka_nakai.so \
-    $(LIB_DIR)/viscoelastic_kelvin_voigt.so
+    $(LIB_DIR)/viscoelastic_kelvin_voigt.so \
+    $(LIB_DIR)/hardening_soil.so
 
 # Default target
 all: directories $(LIBS)
@@ -54,6 +69,31 @@ $(BUILD_DIR)/stress_utils.o: $(C_MODELS_DIR)/stress_utils.c $(C_MODELS_DIR)/stre
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 $(BUILD_DIR)/hookes_law.o: $(ELASTIC_LAWS_DIR)/hookes_law.c $(ELASTIC_LAWS_DIR)/hookes_law.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/strain_utils.o: $(C_MODELS_DIR)/strain_utils.c $(C_MODELS_DIR)/strain_utils.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+# Hardening Soil building blocks: stiffness, yield surfaces, hardening and flow rules
+$(BUILD_DIR)/power_law_stiffness.o: $(ELASTIC_LAWS_DIR)/power_law_stiffness.c $(ELASTIC_LAWS_DIR)/power_law_stiffness.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/mohr_coulomb_surface.o: $(YIELD_SURFACES_DIR)/mohr_coulomb_surface.c $(YIELD_SURFACES_DIR)/mohr_coulomb_surface.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/hyperbolic_shear_surface.o: $(YIELD_SURFACES_DIR)/hyperbolic_shear_surface.c $(YIELD_SURFACES_DIR)/hyperbolic_shear_surface.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/elliptic_cap_surface.o: $(YIELD_SURFACES_DIR)/elliptic_cap_surface.c $(YIELD_SURFACES_DIR)/elliptic_cap_surface.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/hyperbolic_shear_hardening.o: $(HARDENING_RULES_DIR)/hyperbolic_shear_hardening.c $(HARDENING_RULES_DIR)/hyperbolic_shear_hardening.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/cap_hardening.o: $(HARDENING_RULES_DIR)/cap_hardening.c $(HARDENING_RULES_DIR)/cap_hardening.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/rowe_dilatancy.o: $(FLOW_RULES_DIR)/rowe_dilatancy.c $(FLOW_RULES_DIR)/rowe_dilatancy.h
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # Matsuoka-Nakai yield surface
@@ -80,6 +120,10 @@ $(BUILD_DIR)/matsuoka_nakai.o: $(MATSUOKA_NAKAI_DIR)/matsuoka_nakai.c
 $(BUILD_DIR)/viscoelastic_kelvin_voigt.o: $(VISCOELASTIC_KELVIN_VOIGT_DIR)/viscoelastic_kelvin_voigt.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
+# Hardening Soil model
+$(BUILD_DIR)/hardening_soil.o: $(HARDENING_SOIL_DIR)/hardening_soil.c
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
 # Shared libraries
 $(LIB_DIR)/linear_elastic_with_vertical_tens_cutoff.so: $(COMMON_OBJS) $(BUILD_DIR)/linear_elastic_with_vertical_tens_cutoff.o
 	$(CC) $(LDFLAGS) -o $@ $^
@@ -95,6 +139,9 @@ $(LIB_DIR)/matsuoka_nakai.so: $(COMMON_OBJS) $(BUILD_DIR)/matsuoka_nakai_surface
 
 $(LIB_DIR)/viscoelastic_kelvin_voigt.so: $(COMMON_OBJS) $(BUILD_DIR)/viscoelastic_kelvin_voigt.o
 	$(CC) $(LDFLAGS) -o $@ $^
+
+$(LIB_DIR)/hardening_soil.so: $(COMMON_OBJS) $(HARDENING_SOIL_OBJS) $(BUILD_DIR)/hardening_soil.o
+	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
 # Clean target
 clean:
