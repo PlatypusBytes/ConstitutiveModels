@@ -888,8 +888,8 @@ static int hs_single_step(double stress[VOIGTSIZE_3D], double* gamma_p, double* 
     if (ddsdde)
     {
         // the elastic stiffness matrix is returned for stability 
-        //calculate_elastic_stiffness_matrix_3d(st.Eur, prm->nu, ddsdde);
-        hs_elastoplastic_tangent(&st, active, plastic ? n_active : 0, s, *gamma_p, *p_c, Q, ddsdde);
+        calculate_elastic_stiffness_matrix_3d(st.Eur, prm->nu, ddsdde);
+        //hs_elastoplastic_tangent(&st, active, plastic ? n_active : 0, s, *gamma_p, *p_c, Q, ddsdde);
         /* at the apex the stress does not change under further loading: keep only a fraction of
          * the elastic stiffness, as for the corner mode, to keep the global matrix regular */
         if (at_apex)
