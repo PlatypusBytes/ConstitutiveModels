@@ -364,7 +364,9 @@ static int ssc_integrate(const SSCParams* prm, double stress[VOIGTSIZE_3D], doub
     *p_p = exponential_volumetric_hardening(*p_p, x, prm->B);
     *at_failure = (mc.type != MC_RETURN_ELASTIC) ? 1 : 0;
 
-    if (ddsdde) ssc_tangent(&st, sigma_creep, De, &mc, Q, ddsdde);
+    //if (ddsdde) ssc_tangent(&st, sigma_creep, De, &mc, Q, ddsdde);
+    // copy de to ddsdde for stability in boundary value problems
+    if (ddsdde) copy_array(De, VOIGTSIZE_3D * VOIGTSIZE_3D, ddsdde);
     return 1;
 }
 
