@@ -3,3 +3,36 @@ venv/*
 build_C/*
 build_Fortran/*
 */__pycache__/*
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+
+# IDE files
+.idea/
+.vs/
+tests/.vscode/
+
+# Compiler output
+*.o
+*.obj
+*.dll
+*.so
+*.lib
+*.exp
+*.pdb
+
+# LaTeX build output and generated test report figures
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+docs/*_test_report/*_test_report.pdf
+docs/*_test_report/figures/
+docs/*_test_report/data/
+
+# Generated Doxygen documentation
+docs/docs/

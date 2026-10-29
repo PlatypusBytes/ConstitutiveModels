@@ -97,3 +97,28 @@ void vector_scalar_multiply(const double* vector, const double scalar, const int
  */
 void vector_outer_product(const double* vector_1, const double* vector_2, const int length_vector,
                           double* result);
+
+/**
+ * @brief Inverts a 3x3 matrix.
+ *
+ * @param[in]  matrix  Input matrix (3x3) in row-major order.
+ * @param[out] inverse Inverse of the matrix (3x3) in row-major order.
+ * @return 1 on success, 0 if the matrix is singular (|det| < SMALL_VALUE).
+ */
+int invert_matrix_3x3(const double matrix[9], double inverse[9]);
+
+/**
+ * @brief Solves the linear system matrix * solution = rhs by Gaussian elimination with partial
+ * pivoting.
+ *
+ * The system is the leading n x n block of a row-major matrix with row_stride columns, so small
+ * systems of varying size can be stored in a fixed size array. matrix and rhs are overwritten.
+ *
+ * @param[in]     n          Number of equations.
+ * @param[in]     row_stride Number of columns of the storage of matrix (row_stride >= n).
+ * @param[in,out] matrix     System matrix, overwritten by the elimination.
+ * @param[in,out] rhs        Right hand side (length n), overwritten by the elimination.
+ * @param[out]    solution   Solution vector (length n).
+ * @return 1 on success, 0 if the matrix is singular (pivot < SMALL_VALUE).
+ */
+int solve_linear_system(int n, int row_stride, double* matrix, double* rhs, double* solution);

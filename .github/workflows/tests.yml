@@ -104,3 +104,25 @@ jobs:
         name: compiled_fortran_libs_linux
         path: ./${{ env.FORTRAN_LIBRARY_DIR }}/*.so
 
+    - name: Generate test report figures
+      run: |
+        pip install matplotlib
+        for script in docs/*_test_report/make_figures.py; do
+          [ -e "$script" ] || continue
+          python "$script"
+        done
+      shell: bash
+
+    - name: Compile test reports
+      uses: xu-cheng/latex-action@v3
+      with:
+        root_file: docs/*_test_report/*_test_report.tex
+        work_in_root_file_dir: true
+
+    - name: Upload test reports as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: test_reports
+        path: docs/*_test_report/*_test_report.pdf
+        if-no-files-found: error
+

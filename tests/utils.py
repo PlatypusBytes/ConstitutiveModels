@@ -237,6 +237,53 @@ class Utils:
         return stress, ddsdde, statev
 
     @staticmethod
+    def run_python_hardening_soil(umat_file_name, stress, state_vars, strain, dstrain, props, time_step, ndi=3, nshr=3):
+        """
+        Call the Python implementation of the hardening soil model.
+
+        Args:
+            umat_file_name (str): Path to the Python module containing the hardening soil model
+            stress (Sequence[float]): Initial stress vector [σ11, σ22, σ33, σ12, σ13, σ23]
+            state_vars (Sequence[float]): State variables array
+            strain (Sequence[float]): Total strain vector
+            dstrain (Sequence[float]): Increment in strain vector
+            props (Sequence[float]): Material properties array
+            time_step (int): Current time step index
+            ndi (int): Number of direct stress components (default is 3 for 3D)
+            nshr (int): Number of shear stress components (default is 3 for 3D)
+
+            """
+
+        from python_models2.tmp3 import HardeningSoilWithCap
+
+        model = HardeningSoilWithCap(props)
+
+        # Initial stress: isotropic compression at 200 kPa
+        cell_pressure = 600.0
+        sigma0 = np.array([[cell_pressure, 0.0, 0.0],
+                           [0.0, cell_pressure, 0.0],
+                           [0.0, 0.0, cell_pressure]])
+
+        # Set initial preconsolidation pressure slightly above current mean stress
+        p0 = model._p(sigma0)
+        model.set_initial_state(sigma0, p_p0=p0 + 0)  # lightly overconsolidated
+        # model.set_initial_state(sigma0, p_p0=p0)
+        nsteps = 100
+        deps_axial = 0.06 / nsteps  # 0.5% total axial strain
+
+
+
+
+        deps = np.zeros((3, 3))
+        deps[0, 0] = deps_axial
+        model.integrate(deps)
+
+        stress_updated = np.diag(model.sigma)
+        ddsdde_updated = model.ddsde(model.sigma)
+
+
+
+    @staticmethod
     def run_c_umat(umat_file_name, stress, state_vars, strain, dstrain, props, time_step, ndi=3, nshr=3):
         """
         Call the UMAT function from Python using CFFI.
